@@ -1,8 +1,7 @@
 import { View, StyleSheet, Image, ImageSourcePropType } from 'react-native';
-import { SvgXml } from 'react-native-svg';
-import { ORANGE_MONEY_LOGO_XML } from '@/constants/orangeMoneyLogoXml';
 import type { PaymentProvider } from '@/types';
 
+const ORANGE_LOGO = require('../../assets/orange.png') as ImageSourcePropType;
 const MTN_LOGO = require('../../assets/mtn_money.png') as ImageSourcePropType;
 const WAVE_LOGO = require('../../assets/wave.png') as ImageSourcePropType;
 const MOOV_LOGO = require('../../assets/moov_money.png') as ImageSourcePropType;
@@ -16,15 +15,19 @@ type Props = {
 };
 
 /**
- * Logos opérateurs : Orange Money = SVG (Wikimedia Commons).
- * MTN MoMo, Wave et Moov = images fournies dans `assets/`.
+ * Logos opérateurs : PNG dans `assets/`.
  */
 export function PaymentProviderMark({ providerId, maxWidth = 120, maxHeight = 32 }: Props) {
   switch (providerId) {
     case 'orange':
       return (
-        <View style={styles.center}>
-          <SvgXml xml={ORANGE_MONEY_LOGO_XML} width={maxWidth} height={maxHeight} />
+        <View style={[styles.center, styles.rasterWrap]}>
+          <Image
+            source={ORANGE_LOGO}
+            style={[styles.raster, { maxWidth, maxHeight, width: maxWidth, height: maxHeight }]}
+            resizeMode="contain"
+            accessibilityLabel="Orange Money"
+          />
         </View>
       );
     case 'mtn':

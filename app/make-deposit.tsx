@@ -82,10 +82,14 @@ export default function MakeDepositScreen() {
               onPress={() => setSelectedProvider(p.id)}
               activeOpacity={0.85}
             >
-              <View style={styles.providerLogoWrap}>
-                <PaymentProviderMark providerId={p.id} maxWidth={112} maxHeight={34} />
+              <View style={styles.providerCardInner}>
+                <View style={styles.providerLogoWrap}>
+                  <PaymentProviderMark providerId={p.id} maxWidth={68} maxHeight={22} />
+                </View>
+                <Text style={[styles.providerName, { color: p.text }]} numberOfLines={2}>
+                  {p.name}
+                </Text>
               </View>
-              <Text style={[styles.providerName, { color: p.text }]}>{p.name}</Text>
               {selectedProvider === p.id ? (
                 <View style={styles.checkMark}>
                   <Feather name="check" size={16} color={Colors.success} />
@@ -233,23 +237,30 @@ const styles = StyleSheet.create({
   providerCard: {
     width: '47%',
     borderRadius: Theme.radius.md,
-    padding: 20,
-    alignItems: 'center',
-    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     position: 'relative',
+  },
+  providerCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.sm,
   },
   providerSelected: { borderWidth: 3, borderColor: withOpacity(Colors.brand, 0.45) },
   providerLogoWrap: {
-    width: '100%',
+    width: 68,
+    height: 36,
     backgroundColor: Theme.screen.surface,
     borderRadius: Theme.radius.sm,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
   },
-  providerName: { fontFamily: Fonts.outfit.medium, fontSize: 14 },
+  providerName: {
+    flex: 1,
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 14,
+    lineHeight: 19,
+  },
   checkMark: {
     position: 'absolute',
     top: 8,
