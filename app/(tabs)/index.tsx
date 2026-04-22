@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const dateLabel = formatTodayFr();
   const upcomingCount = UPCOMING_DEADLINES.length;
+  const accentColor = Colors.success;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -98,8 +99,8 @@ export default function HomeScreen() {
             onPress={() => router.push('/deposit-to-account')}
             activeOpacity={0.7}
           >
-            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(Colors.brand, 0.12) }]}>
-              <Feather name="arrow-down-left" size={22} color={Colors.brand} />
+            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(accentColor, 0.12) }]}>
+              <Feather name="arrow-down-left" size={22} color={accentColor} />
             </View>
             <View style={styles.quickActionTexts}>
               <Text style={styles.quickActionTitle}>Dépôt</Text>
@@ -128,7 +129,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/savings')}
             activeOpacity={0.7}
           >
-            <Feather name="target" size={20} color={Colors.brand} />
+            <Feather name="target" size={20} color={accentColor} />
             <Text style={styles.navLinkText}>Voir mes objectifs</Text>
             <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
           </TouchableOpacity>
@@ -137,7 +138,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/tontine')}
             activeOpacity={0.7}
           >
-            <Feather name="users" size={20} color={Colors.brand} />
+            <Feather name="users" size={20} color={accentColor} />
             <Text style={styles.navLinkText}>Voir mes tontines</Text>
             <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
           </TouchableOpacity>
@@ -147,7 +148,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/prochaines-echeances')}
               activeOpacity={0.7}
             >
-              <Feather name="clock" size={20} color={Colors.brand} />
+              <Feather name="clock" size={20} color={accentColor} />
               <Text style={styles.navLinkText}>Prochaines échéances</Text>
               <View style={styles.navLinkCountBadge}>
                 <Text style={styles.navLinkCountText}>
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.brand,
+    backgroundColor: Colors.success,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
   bellDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger },
   balanceCard: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Colors.brand,
+    backgroundColor: Colors.success,
     borderRadius: Theme.radius.xl,
     padding: Theme.spacing.xl,
     marginBottom: Theme.spacing.lg,
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
   },
   activityTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 20, color: Colors.gray[900] },
-  seeAll: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.brand },
+  seeAll: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.success },
   activityItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,5 +1,5 @@
 const palette = {
-  orange: '#FF7900',
+  orange: '#FF7800',
   green: '#009E60',
   red: '#DC2626',
   blue: '#3B82F6',
@@ -9,7 +9,7 @@ const palette = {
 
 /** Bottom navigation & FAB — strict brand tokens for chrome */
 export const NavBrand = {
-  primaryOrange: '#FF7900',
+  primaryOrange: '#FF7800',
   emeraldGreen: '#009E60',
   neutralGrey: '#A0A0A0',
   pureWhite: '#FFFFFF',
@@ -45,7 +45,7 @@ export const Colors = {
 
   // Provider-specific (only for mobile money operator cards)
   provider: {
-    orange: '#FF7900',
+    orange: '#FF7800',
     mtn: '#FFCC00',
     wave: '#1DC3E0',
     moov: '#009E60',

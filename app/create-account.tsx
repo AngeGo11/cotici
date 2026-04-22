@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -78,10 +79,8 @@ export default function CreateAccountScreen() {
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </TouchableOpacity>
           <View style={styles.headerLogo}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoLetter}>C</Text>
-            </View>
-            <Text style={styles.logoText}>COTICI</Text>
+            <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.logoStyle}>COTICI</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -223,6 +222,7 @@ export default function CreateAccountScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg, paddingHorizontal: Theme.spacing.page },
+  logoStyle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18},
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -238,17 +238,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerLogo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.white },
-  logoText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.brand },
+  headerLogo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  logoImage: { width: 38, height: 38 },
+  headerTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.brand },
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 8, paddingBottom: 32 },
   title: {

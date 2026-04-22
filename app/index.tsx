@@ -11,21 +11,15 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.logo}>
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoLetter}>C</Text>
-        </View>
-        <Text style={styles.logoText}>COTICI</Text>
-      </View>
+      
 
       <View style={styles.content}>
-        <View style={styles.illustrationContainer}>
-          <View style={styles.decorCircle1} />
-          <View style={styles.decorCircle2} />
-          <View style={styles.placeholderImage}>
-            <Feather name="users" size={64} color={Colors.brand} />
-          </View>
-        </View>
+        
+      <View style={styles.logo}>
+        <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
+
+        <Text style={styles.headline}>COTICI</Text>
+      </View>
 
         <Text style={styles.headline}>
           Votre Tontine,{'\n'}Sécurisée & Digitale
@@ -79,10 +73,8 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg, paddingHorizontal: Theme.spacing.page },
-  logo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 16 },
-  logoCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },
-  logoLetter: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 20, color: Colors.white },
-  logoText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.brand },
+  logo: { alignItems: 'center', justifyContent: 'center', paddingTop: 16 },
+  logoImage: { width: 84, height: 84 },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   illustrationContainer: { width: '100%', marginBottom: 32, position: 'relative', alignItems: 'center' },
   decorCircle1: { position: 'absolute', top: -16, right: 32, width: 64, height: 64, borderRadius: 32, backgroundColor: withOpacity(Colors.brand, 0.1) },

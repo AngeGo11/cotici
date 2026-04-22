@@ -10,6 +10,8 @@ import { NavBrand } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { Theme } from '@/constants/Theme';
 import { NotchedNavBarBackground } from '@/components/NotchedNavBarBackground';
+import { Colors} from '@/constants/Colors';
+
 
 const ICON = 23;
 const FAB_ICON = 22;
@@ -19,6 +21,7 @@ export const FAB_BOTTOM_OFFSET = 28;
 export const NOTCH_GAP = 5;
 const BAR_BODY = 30;
 const NOTCH_EXTRA = 26;
+const FAB_COLOR = Colors.success;
 
 const DEFAULT_TAB_TITLES = ['Accueil', 'Tontines', 'Épargne', 'Profil'] as const;
 
@@ -129,6 +132,7 @@ export function NotchedTabBarChrome({
           {
             bottom: fabBottom,
             left: (width - NOTCHED_FAB_SIZE) / 2,
+            backgroundColor: FAB_COLOR
           },
         ]}
         onPress={onFabPress}

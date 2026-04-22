@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -32,11 +32,9 @@ export default function LoginScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
         </TouchableOpacity>
-        <View style={styles.headerLogo}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoLetter}>C</Text>
-          </View>
-          <Text style={styles.logoText}>COTICI</Text>
+        <View style={styles.headerLogo} flexDirection="row" alignItems="center" gap={8}>
+          <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
+          <Text style={styles.logoStyle}>COTICI</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -114,10 +112,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg, paddingHorizontal: Theme.spacing.page },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.gray[100], alignItems: 'center', justifyContent: 'center' },
-  headerLogo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },
-  logoLetter: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.white },
-  logoText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.brand },
+  headerLogo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  logoImage: { width: 38, height: 38 },
+  logoStyle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18},
+  headerTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.brand },
   form: { flex: 1, paddingTop: 16 },
   title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 28, color: Colors.gray[900], marginBottom: 8 },
   subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 16, color: Colors.gray[500], marginBottom: 32 },
