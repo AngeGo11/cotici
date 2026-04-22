@@ -88,8 +88,8 @@ const styles = StyleSheet.create({
   bottom: { paddingBottom: 16, gap: 12 },
   primaryButton: { backgroundColor: Colors.brand, paddingVertical: 16, paddingHorizontal: Theme.spacing.page, borderRadius: 16, alignItems: 'center' },
   primaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
-  secondaryButton: { backgroundColor: Theme.screen.surface, paddingVertical: 16, paddingHorizontal: Theme.spacing.page, borderRadius: 16, borderWidth: 2, borderColor: Colors.brand, alignItems: 'center' },
-  secondaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.brand },
+  secondaryButton: { backgroundColor: Theme.screen.surface, paddingVertical: 16, paddingHorizontal: Theme.spacing.page, borderRadius: 16, borderWidth: 2, borderColor: Colors.accent, alignItems: 'center' },
+  secondaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.accent },
   terms: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center' },
-  demoLink: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[300], textAlign: 'center' },
+  demoLink: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.accent, textAlign: 'center' },
 });

@@ -56,6 +56,29 @@ export interface PaymentValidation {
   date: string;
 }
 
+export interface AppNotification {
+  id: string;
+  destinataireId: string;
+  expediteurId?: string;
+  objet: string;
+  corps: string;
+  date: string;
+  statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
+  estLue: boolean;
+  category: 'invitation' | 'cotisation' | 'paiement' | 'systeme';
+}
+
+export interface Invitation {
+  id: string;
+  idHote: string;
+  numTelInvite: string;
+  idTontine: string;
+  lien: string;
+  statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
+  createdAt: string;
+  tontineNom: string;
+}
+
 export interface AidHistory {
   id: string;
   type: string;

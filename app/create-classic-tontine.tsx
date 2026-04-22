@@ -11,8 +11,12 @@ export default function CreateClassicTontineScreen() {
   const router = useRouter();
   const [groupName, setGroupName] = useState('');
   const [monthlyAmount, setMonthlyAmount] = useState('');
-  const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('monthly');
+  const [customFrequencyDays, setCustomFrequencyDays] = useState('');
   const [rotationLogic, setRotationLogic] = useState<'random' | 'admin'>('random');
+  const [penaltiesEnabled, setPenaltiesEnabled] = useState(true);
+  const [penaltyType, setPenaltyType] = useState<'retard' | 'absence'>('retard');
+  const [penaltyAmount, setPenaltyAmount] = useState('2000');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -63,8 +67,8 @@ export default function CreateClassicTontineScreen() {
 
         <View style={styles.fieldBlock}>
           <Text style={styles.label}>Fréquence des cotisations</Text>
-          <View style={styles.toggleRow}>
-            {(['weekly', 'monthly'] as const).map((f) => (
+          <View style={styles.toggleGrid}>
+            {(['daily', 'weekly', 'monthly', 'custom'] as const).map((f) => (
               <TouchableOpacity
                 key={f}
                 style={[styles.toggleButton, frequency === f && styles.toggleActive]}
@@ -72,11 +76,94 @@ export default function CreateClassicTontineScreen() {
                 activeOpacity={0.88}
               >
                 <Text style={[styles.toggleText, frequency === f && styles.toggleTextActive]}>
-                  {f === 'weekly' ? 'Hebdomadaire' : 'Mensuelle'}
+                  {f === 'daily'
+                    ? 'Journalière'
+                    : f === 'weekly'
+                      ? 'Hebdomadaire'
+                      : f === 'monthly'
+                        ? 'Mensuelle'
+                        : 'Personnalisée'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {frequency === 'custom' ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Fréquence personnalisée (en jours)</Text>
+            <View style={styles.inputWithUnit}>
+              <TextInput
+                style={styles.inputField}
+                value={customFrequencyDays}
+                onChangeText={setCustomFrequencyDays}
+                placeholder="Ex : 10"
+                placeholderTextColor={Colors.gray[400]}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.unit}>jours</Text>
+            </View>
+            <Text style={styles.helperText}>
+              Les cotisations seront déclenchées tous les {customFrequencyDays || '...'} jours.
+            </Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.sectionEyebrow}>Règles avancées</Text>
+        <View style={styles.advancedCard}>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.switchTitle}>Inclure des pénalités</Text>
+              <Text style={styles.switchHint}>
+                Activez ce mode pour sanctionner les retards ou absences de paiement.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.switchPill, penaltiesEnabled && styles.switchPillActive]}
+              onPress={() => setPenaltiesEnabled((v) => !v)}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.switchKnob, penaltiesEnabled && styles.switchKnobActive]} />
+            </TouchableOpacity>
+          </View>
+
+          {penaltiesEnabled ? (
+            <>
+              <Text style={[styles.label, { paddingHorizontal: 0, marginTop: 14 }]}>Type de pénalité</Text>
+              <View style={[styles.toggleRow, { paddingHorizontal: 0 }]}>
+                {([
+                  { key: 'retard', label: 'Retard de paiement' },
+                  { key: 'absence', label: 'Absence de paiement' },
+                ] as const).map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.toggleButton, penaltyType === opt.key && styles.toggleActive]}
+                    onPress={() => setPenaltyType(opt.key)}
+                    activeOpacity={0.88}
+                  >
+                    <Text style={[styles.toggleText, penaltyType === opt.key && styles.toggleTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.label, { paddingHorizontal: 0, marginTop: 14 }]}>Montant de la pénalité</Text>
+              <View style={styles.inputWithUnit}>
+                <TextInput
+                  style={styles.inputField}
+                  value={penaltyAmount}
+                  onChangeText={setPenaltyAmount}
+                  placeholder="2 000"
+                  placeholderTextColor={Colors.gray[400]}
+                  keyboardType="number-pad"
+                />
+                <Text style={styles.unit}>FCFA</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.helperText}>Aucune pénalité ne sera appliquée dans cette tontine.</Text>
+          )}
         </View>
 
         <Text style={styles.sectionEyebrow}>Ordre de passage</Text>
@@ -244,8 +331,10 @@ const styles = StyleSheet.create({
   },
   unit: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500], paddingRight: Theme.spacing.lg },
   toggleRow: { flexDirection: 'row', gap: Theme.spacing.md, paddingHorizontal: Theme.spacing.page },
+  toggleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Theme.spacing.md, paddingHorizontal: Theme.spacing.page },
   toggleButton: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: '47%',
     paddingVertical: Theme.spacing.md + 2,
     borderRadius: Theme.radius.md,
     borderWidth: 1,
@@ -257,6 +346,50 @@ const styles = StyleSheet.create({
   toggleActive: { backgroundColor: Colors.brand, borderColor: Colors.brand },
   toggleText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[700] },
   toggleTextActive: { color: Colors.white },
+  helperText: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    color: Colors.gray[500],
+    marginTop: 8,
+    paddingHorizontal: Theme.spacing.page,
+  },
+  advancedCard: {
+    marginHorizontal: Theme.spacing.page,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    backgroundColor: Theme.screen.surface,
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.xl,
+    ...Theme.shadow.soft,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  switchTitle: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[900], marginBottom: 4 },
+  switchHint: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[600], lineHeight: 18 },
+  switchPill: {
+    width: 52,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.gray[300],
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+  },
+  switchPillActive: {
+    backgroundColor: withOpacity(Colors.success, 0.6),
+  },
+  switchKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.white,
+  },
+  switchKnobActive: {
+    alignSelf: 'flex-end',
+  },
   radioCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',

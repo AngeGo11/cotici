@@ -45,7 +45,7 @@ export default function HomeScreen() {
               <Text style={styles.dateLine}>{dateLabel}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.bellButton}>
+          <TouchableOpacity style={styles.bellButton} onPress={() => router.push('/notifications')}>
             <Feather name="bell" size={20} color={Colors.gray[700]} />
             <View style={styles.bellDot} />
           </TouchableOpacity>

@@ -17,7 +17,9 @@ export const NavBrand = {
 
 export const Colors = {
   // Brand — all CTA buttons, active tab, links, interactive elements
-  brand: palette.orange,
+  brand: palette.green,
+  // Accent — keep warm Ivorian highlights in secondary UI details
+  accent: palette.orange,
 
   // Success — positive amounts, progress, validation, savings growth
   success: palette.green,

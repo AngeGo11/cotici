@@ -78,7 +78,14 @@ export default function ProfileScreen() {
         <Text style={styles.sectionEyebrow}>Paramètres</Text>
         <View style={styles.settingsBlock}>
           {settingsOptions.map((option) => (
-            <TouchableOpacity key={option.id} style={styles.settingsItem} activeOpacity={0.85}>
+            <TouchableOpacity
+              key={option.id}
+              style={styles.settingsItem}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (option.id === 'notifications') router.push('/notifications');
+              }}
+            >
               <View style={styles.settingsLeft}>
                 <View style={[styles.settingsIcon, { backgroundColor: withOpacity(option.color, 0.1) }]}>
                   <Feather name={option.icon} size={20} color={option.color} />

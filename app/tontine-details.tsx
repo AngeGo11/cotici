@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
 import { Colors, withOpacity } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { Theme } from '@/constants/Theme';
@@ -24,6 +25,14 @@ export default function TontineDetailsScreen() {
   const router = useRouter();
   const paidCount = members.filter((m) => m.status === 'paid').length;
   const totalAmount = members.reduce((sum, m) => sum + (m.amount || 0), 0);
+  const currentTour = 3;
+  const totalTours = 12;
+  const tourProgress = Math.min(currentTour / totalTours, 1);
+  const gaugeSize = 56;
+  const gaugeStroke = 6;
+  const gaugeRadius = (gaugeSize - gaugeStroke) / 2;
+  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
+  const gaugeOffset = gaugeCircumference * (1 - tourProgress);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -35,13 +44,44 @@ export default function TontineDetailsScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => router.push('/admin')}><Text style={styles.adminLink}>Admin</Text></TouchableOpacity>
             <View style={styles.dot} />
+            <TouchableOpacity onPress={() => router.push('/invitations')}><Text style={styles.inviteLink}>Inviter</Text></TouchableOpacity>
+            <View style={styles.dot} />
             <TouchableOpacity style={styles.chatLink} onPress={() => router.push('/chat')}><Feather name="message-circle" size={16} color={Colors.brand} /><Text style={styles.chatLinkText}>Discussion</Text></TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.titleRow}>
-          <View style={styles.titleIcon}><Feather name="users" size={24} color={Colors.white} /></View>
-          <View><Text style={styles.title}>Tontine Famille</Text><Text style={styles.subtitle}>Tour 3 sur 12</Text></View>
+          <View style={styles.gaugeWrap}>
+            <Svg width={gaugeSize} height={gaugeSize}>
+              <Circle
+                cx={gaugeSize / 2}
+                cy={gaugeSize / 2}
+                r={gaugeRadius}
+                stroke={withOpacity(Colors.success, 0.2)}
+                strokeWidth={gaugeStroke}
+                fill="none"
+              />
+              <Circle
+                cx={gaugeSize / 2}
+                cy={gaugeSize / 2}
+                r={gaugeRadius}
+                stroke={Colors.success}
+                strokeWidth={gaugeStroke}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${gaugeCircumference} ${gaugeCircumference}`}
+                strokeDashoffset={gaugeOffset}
+                transform={`rotate(-90 ${gaugeSize / 2} ${gaugeSize / 2})`}
+              />
+            </Svg>
+            <View style={styles.gaugeCenter}>
+              <Text style={styles.gaugeValue}>{currentTour}</Text>
+            </View>
+          </View>
+          <View>
+            <Text style={styles.title}>Tontine Famille</Text>
+            <Text style={styles.subtitle}>Tour {currentTour} sur {totalTours}</Text>
+          </View>
         </View>
 
         <View style={styles.summaryCard}>
@@ -73,11 +113,14 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.gray[100], alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   adminLink: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.brand },
+  inviteLink: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.success },
   dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.gray[300] },
   chatLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   chatLinkText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.brand },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Theme.spacing.page, marginBottom: 24 },
-  titleIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },
+  gaugeWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  gaugeCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  gaugeValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: Colors.gray[900] },
   title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.gray[900] },
   subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
   summaryCard: { marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.success, 0.1), borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: withOpacity(Colors.success, 0.2) },

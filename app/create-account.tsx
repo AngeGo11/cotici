@@ -350,5 +350,5 @@ const styles = StyleSheet.create({
     color: Colors.gray[500],
     textAlign: 'center',
   },
-  loginLinkBold: { color: Colors.brand, fontFamily: Fonts.outfit.medium },
+  loginLinkBold: { color: Colors.accent, fontFamily: Fonts.outfit.medium },
 });

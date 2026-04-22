@@ -66,6 +66,8 @@ export default function RootLayout() {
         <Stack.Screen name="retrait" />
         <Stack.Screen name="activites-recentes" />
         <Stack.Screen name="prochaines-echeances" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="invitations" />
         <Stack.Screen name="activite/[id]" />
         <Stack.Screen name="add-to-savings" />
         <Stack.Screen name="success" />

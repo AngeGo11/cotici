@@ -32,7 +32,7 @@ export default function LoginScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
         </TouchableOpacity>
-        <View style={styles.headerLogo} flexDirection="row" alignItems="center" gap={8}>
+        <View style={styles.headerLogo}>
           <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.logoStyle}>COTICI</Text>
         </View>
@@ -130,10 +130,10 @@ const styles = StyleSheet.create({
   pinInput: { flex: 1, height: 64, backgroundColor: Colors.gray[50], borderRadius: 16, fontFamily: Fonts.outfit.regular, fontSize: 24, textAlign: 'center', color: Colors.gray[900] },
   loginButton: { backgroundColor: Colors.brand, paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginBottom: 16 },
   loginButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
-  forgotPin: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.brand, textAlign: 'center', marginBottom: 12 },
+  forgotPin: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.accent, textAlign: 'center', marginBottom: 12 },
   createAccountWrap: { marginBottom: 16 },
   createAccountText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500], textAlign: 'center' },
-  createAccountBold: { color: Colors.brand, fontFamily: Fonts.outfit.medium },
+  createAccountBold: { color: Colors.accent, fontFamily: Fonts.outfit.medium },
   demoLink: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center' },
   biometric: { alignItems: 'center', gap: 12, paddingBottom: 32 },
   biometricLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },

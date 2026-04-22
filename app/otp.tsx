@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   otpInputFilled: { backgroundColor: Theme.screen.surface, borderWidth: 2, borderColor: withOpacity(Colors.brand, 0.3) },
   timerContainer: { alignItems: 'center' },
   timerText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
-  timerValue: { fontFamily: Fonts.spaceGrotesk.bold, color: Colors.brand },
-  resendText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.brand },
+  timerValue: { fontFamily: Fonts.spaceGrotesk.bold, color: Colors.accent },
+  resendText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.accent },
   helpText: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center', paddingBottom: 32 },
 });

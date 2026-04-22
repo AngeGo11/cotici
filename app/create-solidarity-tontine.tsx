@@ -85,7 +85,7 @@ export default function CreateSolidarityTontineScreen() {
         </View>
 
         <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Montant nécessaire</Text>
+          <Text style={styles.label}>Objectif de la collecte</Text>
           <View style={styles.inputWithUnit}>
             <TextInput
               style={styles.inputField}

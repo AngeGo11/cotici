@@ -17,6 +17,11 @@ const paymentValidations: PaymentValidation[] = [
   { id: '2', memberName: 'Awa Diallo', amount: 15000, method: 'Espèces', date: '09 Fév 2026' },
 ];
 
+const penalties = [
+  { id: 'p1', user: 'Amadou Bamba', type: 'Retard de paiement', amount: 2500, date: '10 Fév 2026', settled: false },
+  { id: 'p2', user: 'Sophie Traoré', type: 'Absence de paiement', amount: 5000, date: '08 Fév 2026', settled: true },
+];
+
 export default function AdminScreen() {
   const router = useRouter();
 
@@ -72,6 +77,33 @@ export default function AdminScreen() {
               <Text style={styles.paymentDate}>{pay.date}</Text>
             </View>
             <TouchableOpacity style={styles.confirmButton}><Text style={styles.confirmText}>Confirmer la réception</Text></TouchableOpacity>
+          </View>
+        ))}
+
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text style={styles.sectionTitle}>Pénalités</Text>
+          <View style={[styles.countBadge, { backgroundColor: Colors.accent }]}>
+            <Text style={styles.countText}>{penalties.length}</Text>
+          </View>
+        </View>
+        {penalties.map((penalty) => (
+          <View key={penalty.id} style={styles.penaltyCard}>
+            <View style={styles.paymentTop}>
+              <View>
+                <Text style={styles.paymentName}>{penalty.user}</Text>
+                <View style={styles.paymentInfo}>
+                  <Text style={styles.penaltyAmount}>{penalty.amount.toLocaleString('fr-FR')} F</Text>
+                  <View style={styles.dot} />
+                  <Text style={styles.paymentMethod}>{penalty.type}</Text>
+                </View>
+              </View>
+              <Text style={styles.paymentDate}>{penalty.date}</Text>
+            </View>
+            <View style={[styles.penaltyStatus, penalty.settled ? styles.penaltyStatusOk : styles.penaltyStatusPending]}>
+              <Text style={[styles.penaltyStatusText, { color: penalty.settled ? Colors.success : Colors.accent }]}>
+                {penalty.settled ? 'Réglée' : 'À régulariser'}
+              </Text>
+            </View>
           </View>
         ))}
 
@@ -132,6 +164,12 @@ const styles = StyleSheet.create({
   paymentDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
   confirmButton: { backgroundColor: Colors.brand, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   confirmText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.white },
+  penaltyCard: { marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.accent, 0.08), borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: withOpacity(Colors.accent, 0.22) },
+  penaltyAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.accent },
+  penaltyStatus: { alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  penaltyStatusPending: { borderColor: withOpacity(Colors.accent, 0.35), backgroundColor: withOpacity(Colors.accent, 0.12) },
+  penaltyStatusOk: { borderColor: withOpacity(Colors.success, 0.35), backgroundColor: withOpacity(Colors.success, 0.1) },
+  penaltyStatusText: { fontFamily: Fonts.outfit.medium, fontSize: 12 },
   settingsItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: Theme.spacing.page, backgroundColor: Theme.screen.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.gray[200], marginBottom: 12 },
   settingsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   settingsIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
