@@ -44,7 +44,16 @@ export default function TontineDetailsScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => router.push('/admin')}><Text style={styles.adminLink}>Admin</Text></TouchableOpacity>
             <View style={styles.dot} />
-            <TouchableOpacity onPress={() => router.push('/invitations')}><Text style={styles.inviteLink}>Inviter</Text></TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                router.push({
+                  pathname: '/new-invitation',
+                  params: { tontineId: 't1', tontineNom: 'Tontine Famille' },
+                })
+              }
+            >
+              <Text style={styles.inviteLink}>Inviter</Text>
+            </TouchableOpacity>
             <View style={styles.dot} />
             <TouchableOpacity style={styles.chatLink} onPress={() => router.push('/chat')}><Feather name="message-circle" size={16} color={Colors.brand} /><Text style={styles.chatLinkText}>Discussion</Text></TouchableOpacity>
           </View>

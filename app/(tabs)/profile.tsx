@@ -34,7 +34,7 @@ export default function ProfileScreen() {
               <Text style={styles.userName}>Marie Koné</Text>
               <Text style={styles.userPhone}>+225 07 12 34 56 78</Text>
             </View>
-            <TouchableOpacity style={styles.editHint} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.editHint} activeOpacity={0.7} onPress={() => router.push('/edit-profile')}>
               <Feather name="edit-3" size={18} color="rgba(255,255,255,0.9)" />
             </TouchableOpacity>
           </View>
@@ -84,6 +84,9 @@ export default function ProfileScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (option.id === 'notifications') router.push('/notifications');
+                else if (option.id === 'security') router.push('/security');
+                else if (option.id === 'help') router.push('/help-support');
+                else if (option.id === 'terms') router.push('/terms');
               }}
             >
               <View style={styles.settingsLeft}>

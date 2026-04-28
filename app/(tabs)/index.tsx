@@ -52,14 +52,16 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceAccountTag}>Compte principal</Text>
-          <View style={styles.balanceHeader}>
-            <Text style={styles.balanceLabel}>Solde disponible</Text>
+          <View style={styles.balanceTopRow}>
+            <View style={styles.balanceTopLeft}>
+              <Text style={styles.balanceAccountTag}>Compte principal</Text>
+              <Text style={styles.balanceLabel}>Solde disponible</Text>
+            </View>
             <TouchableOpacity
               style={styles.eyeButton}
               onPress={() => setBalanceVisible(!balanceVisible)}
             >
-              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={16} color={Colors.white} />
+              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={15} color={Colors.white} />
             </TouchableOpacity>
           </View>
           <View>
@@ -70,7 +72,6 @@ export default function HomeScreen() {
             ) : (
               <Text style={styles.balanceValue}>••••••</Text>
             )}
-            <Text style={styles.balanceChange}>+25.000 FCFA ce mois</Text>
           </View>
 
           <View style={styles.balanceDivider} />
@@ -243,32 +244,46 @@ const styles = StyleSheet.create({
   balanceCard: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Colors.success,
-    borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.xl,
+    borderRadius: Theme.radius.lg,
+    paddingVertical: Theme.spacing.md + 2,
+    paddingHorizontal: Theme.spacing.lg,
     marginBottom: Theme.spacing.lg,
     ...Theme.shadow.brandHero,
   },
+  balanceTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Theme.spacing.sm,
+  },
+  balanceTopLeft: { flex: 1, paddingRight: Theme.spacing.sm },
   balanceAccountTag: {
     fontFamily: Fonts.outfit.medium,
-    fontSize: 11,
+    fontSize: 10,
     color: 'rgba(255,255,255,0.75)',
-    letterSpacing: 0.8,
-    marginBottom: 10,
+    letterSpacing: 0.6,
+    marginBottom: 2,
     textTransform: 'uppercase',
   },
-  balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  balanceLabel: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: 'rgba(255,255,255,0.85)' },
-  eyeButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  balanceValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 36, color: Colors.white },
-  balanceCurrency: { fontSize: 20 },
-  balanceChange: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6 },
-  balanceDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: 20, marginBottom: 16 },
+  balanceLabel: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: 'rgba(255,255,255,0.88)' },
+  eyeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  balanceValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 30, color: Colors.white, letterSpacing: -0.3 },
+  balanceCurrency: { fontSize: 17, fontFamily: Fonts.spaceGrotesk.bold },
+  balanceDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: Theme.spacing.md, marginBottom: Theme.spacing.sm + 2 },
   balanceFootRow: { flexDirection: 'row', alignItems: 'stretch' },
   balanceFootCol: { flex: 1 },
-  balanceFootSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 },
-  balanceFootLabel: { fontFamily: Fonts.outfit.regular, fontSize: 11, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
-  balanceFootValuePos: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: 'rgba(255,255,255,0.95)' },
-  balanceFootValueNeg: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: 'rgba(255,255,255,0.95)' },
+  balanceFootSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: Theme.spacing.sm },
+  balanceFootLabel: { fontFamily: Fonts.outfit.regular, fontSize: 10, color: 'rgba(255,255,255,0.65)', marginBottom: 2 },
+  balanceFootValuePos: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 15, color: 'rgba(255,255,255,0.95)' },
+  balanceFootValueNeg: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 15, color: 'rgba(255,255,255,0.95)' },
   quickActionsTitle: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,

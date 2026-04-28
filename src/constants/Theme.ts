@@ -1,5 +1,23 @@
 import { Colors } from '@/constants/Colors';
 
+/** Halo sous les cartes héros vertes (marque = succès COTICI) */
+const shadowEmeraldHero = {
+  shadowColor: '#065F46',
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.22,
+  shadowRadius: 18,
+  elevation: 8,
+} as const;
+
+/** Ombre du FAB central (disque vert) */
+const shadowEmeraldFab = {
+  shadowColor: '#054F3B',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.32,
+  shadowRadius: 12,
+  elevation: 10,
+} as const;
+
 /**
  * Tokens d’interface : espacements (base 4px), rayons, ombres, fonds.
  * À réutiliser progressivement sur les écrans pour homogénéiser COTICI.
@@ -49,29 +67,11 @@ export const Theme = {
       shadowRadius: 8,
       elevation: 2,
     },
-    /** Carte solde orange — halo chaud */
-    brandHero: {
-      shadowColor: '#C2410C',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.22,
-      shadowRadius: 20,
-      elevation: 8,
-    },
+    /** Carte héros marque (fond vert) */
+    brandHero: shadowEmeraldHero,
     /** FAB central */
-    fab: {
-      shadowColor: '#9A3412',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 12,
-      elevation: 10,
-    },
+    fab: shadowEmeraldFab,
     /** Carte accent vert (épargne / succès) */
-    successHero: {
-      shadowColor: '#065F46',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.22,
-      shadowRadius: 18,
-      elevation: 8,
-    },
+    successHero: shadowEmeraldHero,
   },
 } as const;

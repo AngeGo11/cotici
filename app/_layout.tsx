@@ -55,6 +55,8 @@ export default function RootLayout() {
         <Stack.Screen name="solidarity" />
         <Stack.Screen name="chat" />
         <Stack.Screen name="admin" />
+        <Stack.Screen name="modifier-regles" />
+        <Stack.Screen name="exclure-membre" />
         <Stack.Screen name="create-savings" />
         <Stack.Screen name="create-classic-tontine" />
         <Stack.Screen name="create-solidarity-tontine" />
@@ -68,10 +70,18 @@ export default function RootLayout() {
         <Stack.Screen name="prochaines-echeances" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="invitations" />
+        <Stack.Screen name="new-invitation" />
         <Stack.Screen name="activite/[id]" />
         <Stack.Screen name="add-to-savings" />
         <Stack.Screen name="success" />
         <Stack.Screen name="nav-preview" />
+        <Stack.Screen name="security" />
+        <Stack.Screen name="help-support" />
+        <Stack.Screen name="terms" />
+        <Stack.Screen name="solidarity-rules" />
+        <Stack.Screen name="savings-history" />
+        <Stack.Screen name="solidarity-aid-history" />
+        <Stack.Screen name="edit-profile" />
       </Stack>
     </>
   );

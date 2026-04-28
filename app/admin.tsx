@@ -108,12 +108,36 @@ export default function AdminScreen() {
         ))}
 
         <Text style={[styles.sectionTitle, { paddingHorizontal: Theme.spacing.page, marginTop: 24, marginBottom: 16 }]}>Paramètres du Groupe</Text>
-        <TouchableOpacity style={styles.settingsItem}>
-          <View style={styles.settingsLeft}><View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.info, 0.1) }]}><Feather name="settings" size={20} color={Colors.info} /></View><View><Text style={styles.settingsLabel}>Modifier les règles</Text><Text style={styles.settingsDesc}>Montant, fréquence, conditions</Text></View></View>
+        <TouchableOpacity
+          style={styles.settingsItem}
+          onPress={() => router.push({ pathname: '/modifier-regles', params: { tontineNom: 'Tontine Entrepreneurs' } })}
+          activeOpacity={0.85}
+        >
+          <View style={styles.settingsLeft}>
+            <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.info, 0.1) }]}>
+              <Feather name="settings" size={20} color={Colors.info} />
+            </View>
+            <View>
+              <Text style={styles.settingsLabel}>Modifier les règles</Text>
+              <Text style={styles.settingsDesc}>Montant, fréquence, conditions</Text>
+            </View>
+          </View>
           <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.settingsItem}>
-          <View style={styles.settingsLeft}><View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.danger, 0.08) }]}><Feather name="user-minus" size={20} color={Colors.danger} /></View><View><Text style={[styles.settingsLabel, { color: Colors.danger }]}>Exclure un membre</Text><Text style={styles.settingsDesc}>Retirer définitivement du groupe</Text></View></View>
+        <TouchableOpacity
+          style={styles.settingsItem}
+          onPress={() => router.push({ pathname: '/exclure-membre', params: { tontineNom: 'Tontine Entrepreneurs' } })}
+          activeOpacity={0.85}
+        >
+          <View style={styles.settingsLeft}>
+            <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.danger, 0.08) }]}>
+              <Feather name="user-minus" size={20} color={Colors.danger} />
+            </View>
+            <View>
+              <Text style={[styles.settingsLabel, { color: Colors.danger }]}>Exclure un membre</Text>
+              <Text style={styles.settingsDesc}>Retirer définitivement du groupe</Text>
+            </View>
+          </View>
           <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
         </TouchableOpacity>
 

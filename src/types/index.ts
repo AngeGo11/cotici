@@ -77,6 +77,8 @@ export interface Invitation {
   statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
   createdAt: string;
   tontineNom: string;
+  /** Présent pour les invitations envoyées (côté hôte) */
+  inviteeName?: string;
 }
 
 export interface AidHistory {

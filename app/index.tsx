@@ -11,15 +11,12 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      
-
       <View style={styles.content}>
-        
-      <View style={styles.logo}>
-        <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
+        <View style={styles.logo}>
+          <Image source={require('../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
 
-        <Text style={styles.headline}>COTICI</Text>
-      </View>
+          <Text style={styles.headline}>COTICI</Text>
+        </View>
 
         <Text style={styles.headline}>
           Votre Tontine,{'\n'}Sécurisée & Digitale
@@ -60,9 +57,11 @@ export default function WelcomeScreen() {
         >
           <Text style={styles.secondaryButtonText}>Se connecter</Text>
         </TouchableOpacity>
-        <Text style={styles.terms}>
-          En continuant, vous acceptez nos conditions d'utilisation
-        </Text>
+        <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
+          <Text style={styles.terms}>
+            En continuant, vous acceptez nos conditions d&apos;utilisation
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/(tabs)')}>
           <Text style={styles.demoLink}>Accès rapide dashboard →</Text>
         </TouchableOpacity>
@@ -88,8 +87,14 @@ const styles = StyleSheet.create({
   bottom: { paddingBottom: 16, gap: 12 },
   primaryButton: { backgroundColor: Colors.brand, paddingVertical: 16, paddingHorizontal: Theme.spacing.page, borderRadius: 16, alignItems: 'center' },
   primaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
-  secondaryButton: { backgroundColor: Theme.screen.surface, paddingVertical: 16, paddingHorizontal: Theme.spacing.page, borderRadius: 16, borderWidth: 2, borderColor: Colors.accent, alignItems: 'center' },
-  secondaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.accent },
+  secondaryButton: {
+    backgroundColor: Colors.brand,
+    paddingVertical: 16,
+    paddingHorizontal: Theme.spacing.page,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  secondaryButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
   terms: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center' },
   demoLink: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.accent, textAlign: 'center' },
 });

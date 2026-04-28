@@ -115,13 +115,13 @@ export default function NotificationsScreen() {
             <View
               style={[
                 styles.iconWrap,
-                { backgroundColor: withOpacity(notification.estLue ? Colors.gray[500] : Colors.primary, 0.12) },
+                { backgroundColor: withOpacity(notification.estLue ? Colors.gray[500] : Colors.brand, 0.12) },
               ]}
             >
               <Feather
                 name={getIcon(notification.category)}
                 size={18}
-                color={notification.estLue ? Colors.gray[500] : Colors.primary}
+                color={notification.estLue ? Colors.gray[500] : Colors.brand}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -161,16 +161,16 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: withOpacity(Colors.primary, 0.3),
+    borderColor: withOpacity(Colors.brand, 0.3),
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: withOpacity(Colors.primary, 0.08),
+    backgroundColor: withOpacity(Colors.brand, 0.08),
   },
   readAllButtonDisabled: {
     borderColor: Colors.gray[200],
     backgroundColor: Colors.gray[100],
   },
-  readAllText: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.primary },
+  readAllText: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.brand },
   subtitle: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 14,
@@ -193,8 +193,8 @@ const styles = StyleSheet.create({
     ...Theme.shadow.soft,
   },
   itemUnread: {
-    borderColor: withOpacity(Colors.primary, 0.25),
-    backgroundColor: withOpacity(Colors.primary, 0.04),
+    borderColor: withOpacity(Colors.brand, 0.25),
+    backgroundColor: withOpacity(Colors.brand, 0.04),
   },
   iconWrap: {
     width: 38,

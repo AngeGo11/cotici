@@ -15,7 +15,7 @@ import { Colors} from '@/constants/Colors';
 
 const ICON = 23;
 const FAB_ICON = 22;
-/** Diamètre du disque orange (bouton central) */
+/** Diamètre du disque central (FAB) */
 export const NOTCHED_FAB_SIZE = 50;
 export const FAB_BOTTOM_OFFSET = 28;
 export const NOTCH_GAP = 5;

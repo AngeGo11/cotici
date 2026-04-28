@@ -5,21 +5,9 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { Theme } from '@/constants/Theme';
-import type { AidHistory } from '@/types';
+import { SOLIDARITY_AID_HISTORY, getSolidarityAidIconConfig } from '@/data/solidarityAidHistory';
 
-const aidHistory: AidHistory[] = [
-  { id: '1', type: 'Aide Santé', recipient: 'Fatou K.', amount: 25000, date: '05 Fév 2026', icon: 'medical' },
-  { id: '2', type: 'Aide Éducation', recipient: 'Amadou B.', amount: 30000, date: '28 Jan 2026', icon: 'education' },
-  { id: '3', type: 'Urgence Famille', recipient: 'Marie K.', amount: 40000, date: '15 Jan 2026', icon: 'family' },
-  { id: '4', type: 'Aide Médicale', recipient: 'Ibrahim S.', amount: 35000, date: '03 Jan 2026', icon: 'medical' },
-];
-
-const iconConfig: Record<AidHistory['icon'], { name: keyof typeof Feather.glyphMap; color: string; bg: string }> = {
-  medical: { name: 'plus', color: Colors.danger, bg: withOpacity(Colors.danger, 0.08) },
-  education: { name: 'book-open', color: Colors.info, bg: withOpacity(Colors.info, 0.1) },
-  emergency: { name: 'alert-circle', color: Colors.brand, bg: withOpacity(Colors.brand, 0.1) },
-  family: { name: 'heart', color: Colors.brand, bg: withOpacity(Colors.brand, 0.1) },
-};
+const aidPreview = SOLIDARITY_AID_HISTORY.slice(0, 4);
 
 export default function SolidarityScreen() {
   const router = useRouter();
@@ -31,7 +19,9 @@ export default function SolidarityScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </TouchableOpacity>
-          <TouchableOpacity><Text style={styles.ruleLink}>Règlement</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/solidarity-rules')} activeOpacity={0.7}>
+            <Text style={styles.ruleLink}>Règlement</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.titleRow}>
@@ -69,11 +59,13 @@ export default function SolidarityScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Historique des Aides</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Voir tout</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/solidarity-aid-history')} activeOpacity={0.7}>
+            <Text style={styles.seeAll}>Voir tout</Text>
+          </TouchableOpacity>
         </View>
 
-        {aidHistory.map((aid) => {
-          const cfg = iconConfig[aid.icon];
+        {aidPreview.map((aid) => {
+          const cfg = getSolidarityAidIconConfig(aid.icon);
           return (
             <View key={aid.id} style={styles.aidItem}>
               <View style={styles.aidLeft}>

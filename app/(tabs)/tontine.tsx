@@ -7,9 +7,9 @@ import { Fonts } from '@/constants/Fonts';
 import { Theme } from '@/constants/Theme';
 
 const tontines = [
-  { id: '1', name: 'Tontine Famille', members: 8, turn: '3/12', amount: 80000, status: 'active' as const },
-  { id: '2', name: 'Tontine Entrepreneurs', members: 12, turn: '5/12', amount: 120000, status: 'active' as const },
-  { id: '3', name: 'Tontine Solidaire Commerçants', members: 6, turn: '2/6', amount: 50000, status: 'active' as const },
+  { id: '1', name: 'Tontine Famille', members: 8, turn: '3/12', amount: 80000, status: 'active' as const, isSolidarity: false as const },
+  { id: '2', name: 'Tontine Entrepreneurs', members: 12, turn: '5/12', amount: 120000, status: 'active' as const, isSolidarity: false as const },
+  { id: '3', name: 'Tontine Solidaire Commerçants', members: 6, turn: '2/6', amount: 50000, status: 'active' as const, isSolidarity: true as const },
 ];
 
 const statusLabel = {
@@ -84,7 +84,7 @@ export default function TontineListScreen() {
             <TouchableOpacity
               key={tontine.id}
               style={styles.tontineCard}
-              onPress={() => router.push('/tontine-details')}
+              onPress={() => router.push(tontine.isSolidarity ? '/solidarity' : '/tontine-details')}
               activeOpacity={0.85}
             >
               <View style={styles.cardTop}>

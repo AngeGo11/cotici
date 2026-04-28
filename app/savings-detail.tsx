@@ -6,6 +6,7 @@ import { Svg, Circle } from 'react-native-svg';
 import { Colors, withOpacity } from '@/constants/Colors';
 import { Fonts } from '@/constants/Fonts';
 import { Theme } from '@/constants/Theme';
+import { SAVINGS_CONTRIBUTIONS } from '@/data/savingsContributions';
 
 const savedAmount = 325000;
 const goalAmount = 500000;
@@ -16,11 +17,7 @@ const radius = (size - strokeWidth) / 2;
 const circumference = 2 * Math.PI * radius;
 const progressOffset = ((100 - percentage) / 100) * circumference;
 
-const contributions = [
-  { date: '05 Fév 2026', amount: 50000 },
-  { date: '01 Fév 2026', amount: 75000 },
-  { date: '28 Jan 2026', amount: 100000 },
-];
+const contributionsPreview = SAVINGS_CONTRIBUTIONS.slice(0, 3);
 
 export default function SavingsDetailScreen() {
   const router = useRouter();
@@ -32,7 +29,11 @@ export default function SavingsDetailScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.historyPill} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.historyPill}
+            activeOpacity={0.85}
+            onPress={() => router.push('/savings-history')}
+          >
             <Feather name="clock" size={16} color={Colors.brand} />
             <Text style={styles.historyLink}>Historique</Text>
           </TouchableOpacity>
@@ -132,14 +133,14 @@ export default function SavingsDetailScreen() {
         </View>
 
         <Text style={styles.sectionEyebrow}>Contributions récentes</Text>
-        {contributions.map((c, i) => (
-          <View key={i} style={styles.contributionItem}>
+        {contributionsPreview.map((c) => (
+          <View key={c.id} style={styles.contributionItem}>
             <View style={styles.contribLeft}>
               <View style={styles.contribIcon}>
                 <Feather name="arrow-down-left" size={18} color={Colors.success} />
               </View>
               <View>
-                <Text style={styles.contributionType}>Dépôt effectué</Text>
+                <Text style={styles.contributionType}>{c.label}</Text>
                 <Text style={styles.contributionDate}>{c.date}</Text>
               </View>
             </View>
