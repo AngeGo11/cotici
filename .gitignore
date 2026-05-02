@@ -2,6 +2,7 @@
 
 .env
 .venv
+.idea
 # dependencies
 node_modules/
 
