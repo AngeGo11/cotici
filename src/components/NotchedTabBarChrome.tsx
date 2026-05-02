@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { NavBrand } from '@/constants/Colors';
-import { Fonts } from '@/constants/Fonts';
-import { Theme } from '@/constants/Theme';
+import { NavBrand } from '@/shared/theme/Colors';
+import { Fonts } from '@/shared/theme/Fonts';
+import { Theme } from '@/shared/theme/Theme';
 import { NotchedNavBarBackground } from '@/components/NotchedNavBarBackground';
-import { Colors} from '@/constants/Colors';
+import { Colors} from '@/shared/theme/Colors';
 
 
 const ICON = 23;

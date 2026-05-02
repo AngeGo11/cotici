@@ -1,8 +1,8 @@
 import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/Theme';
+import { Colors } from '@/shared/theme/Colors';
+import { Theme } from '@/shared/theme/Theme';
 import { MainTabBar } from '@/components/MainTabBar';
 
 export default function TabLayout() {

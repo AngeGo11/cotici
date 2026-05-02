@@ -34,7 +34,7 @@ export const RECENT_ACTIVITIES: ActivityDetail[] = [
     status: 'Complété',
     method: 'Wave',
     accountHint: '+225 07 •• •• 11',
-    note: 'Transfert vers votre compte Wave.',
+    note: 'Transfert vers votre compte ',
   },
   {
     id: '4',

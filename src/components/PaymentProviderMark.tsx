@@ -3,7 +3,7 @@ import type { PaymentProvider } from '@/types';
 
 const ORANGE_LOGO = require('../../assets/orange.png') as ImageSourcePropType;
 const MTN_LOGO = require('../../assets/mtn_money.png') as ImageSourcePropType;
-const WAVE_LOGO = require('../../assets/wave.png') as ImageSourcePropType;
+const WAVE_LOGO = require('../../assets/wave.jpg') as ImageSourcePropType;
 const MOOV_LOGO = require('../../assets/moov_money.png') as ImageSourcePropType;
 
 type Props = {

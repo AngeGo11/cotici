@@ -11,9 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
-import { Fonts } from '@/constants/Fonts';
-import { Theme } from '@/constants/Theme';
+import { Colors } from '@/shared/theme/Colors';
+import { Fonts } from '@/shared/theme/Fonts';
+import { Theme } from '@/shared/theme/Theme';
 
 type Props = {
   visible: boolean;

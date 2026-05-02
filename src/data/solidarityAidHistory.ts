@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { Colors, withOpacity } from '@/constants/Colors';
+import { Colors, withOpacity } from '@/shared/theme/Colors';
 import type { AidHistory } from '@/types';
 
 export const SOLIDARITY_AID_HISTORY: AidHistory[] = [

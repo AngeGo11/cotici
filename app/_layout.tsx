@@ -16,8 +16,8 @@ import {
   Outfit_700Bold,
 } from '@expo-google-fonts/outfit';
 import * as SplashScreen from 'expo-system-ui';
-import { Colors } from '@/constants/Colors';
-import { Theme } from '@/constants/Theme';
+import { Colors } from '@/shared/theme/Colors';
+import { Theme } from '@/shared/theme/Theme';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({

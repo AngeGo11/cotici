@@ -1,5 +1,5 @@
 import Svg, { Path } from 'react-native-svg';
-import { NavBrand } from '@/constants/Colors';
+import { NavBrand } from '@/shared/theme/Colors';
 
 export type NotchedNavBarBackgroundProps = {
   width: number;
