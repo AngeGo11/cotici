@@ -1,10 +1,10 @@
 services:
   # ==========================================
-  # BASE DE DONNÉES (PostgreSQL)
+  # BASE DE DONNÉES (PostgreSQL) implémente les corrections que tu juges necessaires on va voir
   # ==========================================
   db:
     image: postgres:15
-    container_name: datacoop-db
+    container_name: cotici-db
     environment:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - datacoop-network
+      - cotici-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -26,5 +26,5 @@ volumes:
   postgres_data:
 
 networks:
-  datacoop-network:
+  cotici-network:
     driver: bridge
