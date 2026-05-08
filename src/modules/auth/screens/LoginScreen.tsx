@@ -11,6 +11,8 @@ export default function LoginScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState(['', '', '', '']);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const pinRefs = useRef<(TextInput | null)[]>([]);
 
   const handlePinChange = (index: number, value: string) => {
@@ -24,6 +26,57 @@ export default function LoginScreen() {
 
   const handlePinKeyPress = (index: number, key: string) => {
     if (key === 'Backspace' && !pin[index] && index > 0) pinRefs.current[index - 1]?.focus();
+  };
+
+  const normalizePhoneToUsername = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.startsWith('225') && digits.length > 10) return digits.slice(3);
+    return digits;
+  };
+
+  const handleLogin = async () => {
+    if (isSubmitting) return;
+
+    const username = normalizePhoneToUsername(phoneNumber);
+    const password = pin.join('');
+    if (!username || password.length !== 4) {
+      setErrorMessage('Numéro ou code PIN invalide.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const proxyBaseUrl = process.env.EXPO_PUBLIC_PROXY_URL || 'http://127.0.0.1:8001';
+      const response = await fetch(`${proxyBaseUrl}/api/request-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, purpose: 'login' }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        const detail =
+          typeof data?.detail === 'string'
+            ? data.detail
+            : 'Connexion impossible. Vérifie ton numéro et ton PIN.';
+        setErrorMessage(detail);
+        return;
+      }
+
+      router.push({
+        pathname: '/otp',
+        params: {
+          challengeId: String(data?.challenge_id || ''),
+          phoneHint: String(data?.phone_hint || ''),
+        },
+      });
+    } catch {
+      setErrorMessage('Serveur inaccessible. Vérifie le proxy et le backend.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -79,9 +132,10 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/otp')}>
-          <Text style={styles.loginButtonText}>Connexion</Text>
+        <TouchableOpacity style={[styles.loginButton, isSubmitting && styles.loginButtonDisabled]} onPress={handleLogin} disabled={isSubmitting}>
+          <Text style={styles.loginButtonText}>{isSubmitting ? 'Connexion...' : 'Connexion'}</Text>
         </TouchableOpacity>
+        {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
         <TouchableOpacity>
           <Text style={styles.forgotPin}>Code PIN oublié ?</Text>
@@ -127,9 +181,11 @@ const styles = StyleSheet.create({
   divider: { width: 1, height: 24, backgroundColor: Colors.gray[300], marginLeft: 4 },
   phoneField: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 16, color: Colors.gray[900], paddingLeft: 8 },
   pinRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  pinInput: { flex: 1, height: 64, backgroundColor: Colors.gray[50], borderRadius: 16, fontFamily: Fonts.outfit.regular, fontSize: 24, textAlign: 'center', color: Colors.gray[900] },
+  pinInput: { flex: 1, height: 64, backgroundColor: Colors.gray[50], borderRadius: 16, borderWidth: 1, borderColor: Colors.gray[300], fontFamily: Fonts.outfit.regular, fontSize: 24, textAlign: 'center', color: Colors.gray[900] },
   loginButton: { backgroundColor: Colors.brand, paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginBottom: 16 },
+  loginButtonDisabled: { opacity: 0.65 },
   loginButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
+  errorText: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.danger, textAlign: 'center', marginBottom: 8 },
   forgotPin: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.accent, textAlign: 'center', marginBottom: 12 },
   createAccountWrap: { marginBottom: 16 },
   createAccountText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500], textAlign: 'center' },

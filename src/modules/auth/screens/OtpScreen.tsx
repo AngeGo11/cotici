@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
@@ -9,8 +9,13 @@ import { Theme } from '@/shared/theme/Theme';
 
 export default function OTPScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ challengeId?: string; phoneHint?: string }>();
+  const challengeId = typeof params.challengeId === 'string' ? params.challengeId : '';
+  const phoneHint = typeof params.phoneHint === 'string' ? params.phoneHint : '';
   const [otp, setOtp] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(60);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
@@ -20,9 +25,38 @@ export default function OTPScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  const proxyBaseUrl = process.env.EXPO_PUBLIC_PROXY_URL || 'http://127.0.0.1:8001';
+
+  const verifyOtp = async (code: string) => {
+    if (!challengeId || isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch(`${proxyBaseUrl}/api/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challenge_id: challengeId, otp: code }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : 'Code invalide.';
+        setErrorMessage(detail);
+        setOtp(['', '', '', '']);
+        inputRefs.current[0]?.focus();
+        return;
+      }
+      // TODO: persist access/refresh tokens (SecureStore) when token storage is added.
+      router.replace('/(tabs)');
+    } catch {
+      setErrorMessage('Serveur inaccessible. Réessaie dans un instant.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (otp.every((digit) => digit !== '')) {
-      setTimeout(() => { router.replace('/(tabs)'); }, 500);
+      void verifyOtp(otp.join(''));
     }
   }, [otp]);
 
@@ -40,9 +74,27 @@ export default function OTPScreen() {
   };
 
   const handleResend = () => {
-    setTimer(60);
-    setOtp(['', '', '', '']);
-    inputRefs.current[0]?.focus();
+    if (!challengeId || isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage('');
+    fetch(`${proxyBaseUrl}/api/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challenge_id: challengeId }),
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          const detail = typeof data?.detail === 'string' ? data.detail : 'Impossible de renvoyer le code.';
+          setErrorMessage(detail);
+          return;
+        }
+        setTimer(typeof data?.expires_in === 'number' ? data.expires_in : 60);
+        setOtp(['', '', '', '']);
+        inputRefs.current[0]?.focus();
+      })
+      .catch(() => setErrorMessage('Serveur inaccessible. Réessaie plus tard.'))
+      .finally(() => setIsSubmitting(false));
   };
 
   return (
@@ -63,7 +115,9 @@ export default function OTPScreen() {
         </View>
 
         <Text style={styles.title}>Vérification</Text>
-        <Text style={styles.subtitle}>Entrez le code reçu par SMS</Text>
+        <Text style={styles.subtitle}>
+          Entrez le code reçu par SMS{phoneHint ? ` sur ${phoneHint}` : ''}
+        </Text>
 
         <View style={styles.otpRow}>
           {otp.map((digit, index) => (
@@ -92,6 +146,7 @@ export default function OTPScreen() {
             </TouchableOpacity>
           )}
         </View>
+        {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
       </View>
 
       <Text style={styles.helpText}>
@@ -112,11 +167,12 @@ const styles = StyleSheet.create({
   title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 28, color: Colors.gray[900], marginBottom: 8, textAlign: 'center' },
   subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 16, color: Colors.gray[500], marginBottom: 32, textAlign: 'center' },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 32 },
-  otpInput: { width: 64, height: 80, backgroundColor: Colors.gray[50], borderRadius: 16, fontFamily: Fonts.spaceGrotesk.bold, fontSize: 28, textAlign: 'center', color: Colors.gray[900] },
+  otpInput: { width: 64, height: 80, backgroundColor: Colors.gray[50], borderRadius: 16, borderWidth: 1, borderColor: Colors.gray[300], fontFamily: Fonts.spaceGrotesk.bold, fontSize: 28, textAlign: 'center', color: Colors.gray[900] },
   otpInputFilled: { backgroundColor: Theme.screen.surface, borderWidth: 2, borderColor: withOpacity(Colors.brand, 0.3) },
   timerContainer: { alignItems: 'center' },
   timerText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
   timerValue: { fontFamily: Fonts.spaceGrotesk.bold, color: Colors.accent },
   resendText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.accent },
+  errorText: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.danger, marginTop: 12, textAlign: 'center' },
   helpText: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center', paddingBottom: 32 },
 });

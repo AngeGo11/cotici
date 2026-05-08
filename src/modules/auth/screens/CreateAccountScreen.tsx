@@ -21,11 +21,14 @@ const PIN_LENGTH = 4;
 
 export default function CreateAccountScreen() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pin, setPin] = useState<string[]>(() => Array(PIN_LENGTH).fill(''));
   const [confirmPin, setConfirmPin] = useState<string[]>(() => Array(PIN_LENGTH).fill(''));
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const pinRefs = useRef<(TextInput | null)[]>([]);
   const confirmPinRefs = useRef<(TextInput | null)[]>([]);
 
@@ -57,14 +60,64 @@ export default function CreateAccountScreen() {
   const confirmComplete = confirmPin.every((d) => d !== '');
   const pinsMatch = pinComplete && confirmComplete && pin.join('') === confirmPin.join('');
   const canSubmit =
-    fullName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    firstName.trim().length > 0 &&
     phoneNumber.trim().length > 0 &&
     pinsMatch &&
     acceptedTerms;
 
-  const onSubmit = () => {
+  const normalizePhone = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.startsWith('225') && digits.length > 10) return digits.slice(3);
+    return digits;
+  };
+
+  const onSubmit = async () => {
     if (!canSubmit) return;
-    router.push('/otp');
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+    const proxyBaseUrl = process.env.EXPO_PUBLIC_PROXY_URL || 'http://127.0.0.1:8001';
+    const normalizedPhone = normalizePhone(phoneNumber);
+    const pinCode = pin.join('');
+    try {
+      const otpResponse = await fetch(`${proxyBaseUrl}/api/request-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: normalizedPhone,
+          password: pinCode,
+          purpose: 'register',
+          numero_telephone: normalizedPhone,
+          first_name: firstName,
+          last_name: lastName,
+          email: '',
+        }),
+      });
+
+      const otpData = await otpResponse.json();
+      if (!otpResponse.ok) {
+        const otpError =
+          typeof otpData?.detail === 'string'
+            ? otpData.detail
+            : 'Impossible d’envoyer le code OTP.';
+        setErrorMessage(otpError);
+        return;
+      }
+
+      router.push({
+        pathname: '/otp',
+        params: {
+          challengeId: String(otpData?.challenge_id || ''),
+          phoneHint: String(otpData?.phone_hint || ''),
+        },
+      });
+    } catch {
+      setErrorMessage('Serveur inaccessible. Vérifie backend et proxy.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -95,12 +148,25 @@ export default function CreateAccountScreen() {
           <Text style={styles.subtitle}>Rejoignez COTICI en quelques étapes</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Nom complet</Text>
+            <Text style={styles.label}>Nom</Text>
             <TextInput
               style={styles.textField}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Jean Kouassi"
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Kouassi"
+              placeholderTextColor={Colors.gray[400]}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Prénom</Text>
+            <TextInput
+              style={styles.textField}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Jean"
               placeholderTextColor={Colors.gray[400]}
               autoCapitalize="words"
               autoCorrect={false}
@@ -199,12 +265,13 @@ export default function CreateAccountScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+            style={[styles.submitButton, (!canSubmit || isSubmitting) && styles.submitButtonDisabled]}
             onPress={onSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
           >
-            <Text style={styles.submitButtonText}>Continuer</Text>
+            <Text style={styles.submitButtonText}>{isSubmitting ? 'Création...' : 'Continuer'}</Text>
           </TouchableOpacity>
+          {!!errorMessage && <Text style={styles.errorHint}>{errorMessage}</Text>}
 
           <TouchableOpacity
             style={styles.loginLinkWrap}
@@ -255,7 +322,7 @@ const styles = StyleSheet.create({
     color: Colors.gray[500],
     marginBottom: 28,
   },
-  fieldGroup: { marginBottom: 20 },
+  fieldGroup: { marginBottom: 20},
   label: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 14,
@@ -296,6 +363,8 @@ const styles = StyleSheet.create({
     height: 64,
     backgroundColor: Colors.gray[50],
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray[300],
     fontFamily: Fonts.outfit.regular,
     fontSize: 24,
     textAlign: 'center',
