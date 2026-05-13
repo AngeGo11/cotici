@@ -128,20 +128,7 @@ export default function TontineListScreen() {
           );
         })}
 
-        <TouchableOpacity
-          style={styles.createCta}
-          onPress={() => router.push('/create-classic-tontine')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.createIcon}>
-            <Feather name="plus-circle" size={22} color={Colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.createTitle}>Créer une tontine classique</Text>
-            <Text style={styles.createSubtitle}>Définir les membres, le montant et la durée du cycle</Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-        </TouchableOpacity>
+        
 
         <View style={{ height: 40 }} />
       </ScrollView>

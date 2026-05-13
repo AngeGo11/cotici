@@ -8,8 +8,7 @@ import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { RECENT_ACTIVITIES } from '@/data/recentActivities';
 import { UPCOMING_DEADLINES } from '@/data/upcomingDeadlines';
-
-const USER_FIRST_NAME = 'Jean';
+import { useAuth, formatFcfaDots, getGreetingName, getUserInitials } from '@/shared/auth';
 
 function formatTodayFr(): string {
   const d = new Date();
@@ -24,8 +23,12 @@ function formatTodayFr(): string {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const dateLabel = formatTodayFr();
+  const greetingName = getGreetingName(user);
+  const initials = getUserInitials(user);
+  const balanceDisplay = formatFcfaDots(user?.solde_courant);
   const upcomingCount = UPCOMING_DEADLINES.length;
   const accentColor = Colors.success;
 
@@ -38,10 +41,10 @@ export default function HomeScreen() {
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>JD</Text>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
             <View style={styles.greetingBlock}>
-              <Text style={styles.greeting}>Bonjour, {USER_FIRST_NAME}</Text>
+              <Text style={styles.greeting}>Bonjour, {greetingName}</Text>
               <Text style={styles.dateLine}>{dateLabel}</Text>
             </View>
           </View>
@@ -67,7 +70,7 @@ export default function HomeScreen() {
           <View>
             {balanceVisible ? (
               <Text style={styles.balanceValue}>
-                487.000 <Text style={styles.balanceCurrency}>FCFA</Text>
+                {balanceDisplay} <Text style={styles.balanceCurrency}>FCFA</Text>
               </Text>
             ) : (
               <Text style={styles.balanceValue}>••••••</Text>

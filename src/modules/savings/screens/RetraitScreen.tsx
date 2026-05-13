@@ -12,13 +12,20 @@ import type { PaymentProvider } from '@/types';
 const BALANCE_FCFA = 487_000;
 
 const providers = [
-  { id: 'orange' as const, name: 'Orange Money', bg: Colors.provider.orange, text: Colors.white },
-  { id: 'mtn' as const, name: 'MTN MoMo', bg: Colors.provider.mtn, text: Colors.gray[900] },
-  { id: 'wave' as const, name: 'Wave', bg: Colors.provider.wave, text: Colors.white },
-  { id: 'moov' as const, name: 'Moov Money', bg: Colors.provider.moov, text: Colors.white },
+  { id: 'orange' as const, name: 'Orange Money', bg: Colors.provider.orange },
+  { id: 'mtn' as const, name: 'MTN MoMo', bg: Colors.provider.mtn },
+  { id: 'wave' as const, name: 'Wave', bg: Colors.provider.wave },
+  { id: 'moov' as const, name: 'Moov Money', bg: Colors.provider.moov },
 ];
 
 const quickAmounts = [5000, 10000, 25000, 50000, 100000];
+
+/** Montants entiers, espaces insécables (locale FR). */
+function formatMoney(amount: number): string {
+  return Math.round(amount).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+}
+
+const tabularAmount = { fontVariant: ['tabular-nums' as const] };
 
 export default function RetraitScreen() {
   const router = useRouter();
@@ -68,19 +75,24 @@ export default function RetraitScreen() {
         <View style={styles.balanceHero}>
           <Text style={styles.balanceTag}>Compte principal</Text>
           <Text style={styles.balanceLabel}>Solde disponible</Text>
-          <Text style={styles.balanceValue}>
-            {BALANCE_FCFA.toLocaleString('fr-FR')}{' '}
+          <Text style={[styles.balanceValue, tabularAmount]}>
+            {`${formatMoney(BALANCE_FCFA)}\u202f`}
             <Text style={styles.balanceCurrency}>FCFA</Text>
           </Text>
-          <Text style={styles.balanceHint}>Minimum de retrait : 100 FCFA</Text>
+          <Text style={styles.balanceHint}>
+            Retrait minimum{' '}
+            <Text style={[styles.balanceHintEm, tabularAmount]}>{formatMoney(100)} FCFA</Text>
+          </Text>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Montant</Text>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionEyebrow}>Montant</Text>
+        </View>
         <View style={styles.surfaceCard}>
           <Text style={styles.inCardLabel}>Combien voulez-vous retirer ?</Text>
           <View style={[styles.amountInputRow, exceedsBalance && styles.amountInputRowError]}>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, tabularAmount]}
               value={amountRaw}
               onChangeText={setAmountRaw}
               placeholder="0"
@@ -121,9 +133,10 @@ export default function RetraitScreen() {
                       styles.quickChipText,
                       disabled && styles.quickChipTextDisabled,
                       selected && !disabled && styles.quickChipTextSelected,
+                      tabularAmount,
                     ]}
                   >
-                    {a.toLocaleString('fr-FR')} F
+                    {formatMoney(a)} F
                   </Text>
                 </TouchableOpacity>
               );
@@ -131,45 +144,50 @@ export default function RetraitScreen() {
           </ScrollView>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Opérateur</Text>
-        <Text style={styles.sectionHint}>
-          {"Vers quel portefeuille envoyer l'argent ?"}
-        </Text>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionEyebrow}>Opérateur Mobile Money</Text>
+          <Text style={styles.sectionHint}>
+            {"Vers quel portefeuille envoyer l'argent ?"}
+          </Text>
+        </View>
         <View style={styles.providerGrid}>
-          {providers.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[
-                styles.providerCard,
-                { backgroundColor: p.bg },
-                selectedProvider === p.id && styles.providerSelected,
-                Theme.shadow.soft,
-              ]}
-              onPress={() => setSelectedProvider(p.id)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.providerCardInner}>
-                <View style={styles.providerLogoWrap}>
-                  <PaymentProviderMark providerId={p.id} maxWidth={68} maxHeight={22} />
+          {providers.map((p) => {
+            const selected = selectedProvider === p.id;
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.providerCell, selected && styles.providerCellSelected]}
+                onPress={() => setSelectedProvider(p.id)}
+                activeOpacity={0.88}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${p.name}, Mobile Money`}
+              >
+                <View style={[styles.providerBrandStripe, { backgroundColor: p.bg }]} />
+                <View style={styles.providerCellLogo}>
+                  <PaymentProviderMark providerId={p.id} maxWidth={76} maxHeight={26} />
                 </View>
-                <Text style={[styles.providerName, { color: p.text }]} numberOfLines={2}>
-                  {p.name}
-                </Text>
-              </View>
-              {selectedProvider === p.id ? (
-                <View style={styles.checkMark}>
-                  <Feather name="check" size={16} color={Colors.success} />
+                <View style={styles.providerCellText}>
+                  <Text style={styles.providerCellTitle} numberOfLines={2}>
+                    {p.name}
+                  </Text>
+                  <Text style={styles.providerCellSubtitle}>Mobile Money</Text>
                 </View>
-              ) : null}
-            </TouchableOpacity>
-          ))}
+                <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
+                  {selected ? <View style={styles.radioInner} /> : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <Text style={styles.sectionEyebrow}>Numéro du compte</Text>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionEyebrow}>Numéro du compte</Text>
+        </View>
         <View style={styles.surfaceCard}>
           <Text style={styles.inCardLabel}>Téléphone qui recevra le transfert</Text>
           <TextInput
-            style={styles.inputBare}
+            style={[styles.inputBare, tabularAmount]}
             value={phoneNumber}
             onChangeText={setPhoneNumber}
             keyboardType="phone-pad"
@@ -180,17 +198,29 @@ export default function RetraitScreen() {
 
         {newBalance !== null ? (
           <View style={styles.previewCard}>
+            <Text style={styles.previewEyebrow}>Après ce retrait</Text>
             <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>Solde après retrait</Text>
-              <Text style={styles.previewValue}>{newBalance.toLocaleString('fr-FR')} F</Text>
+              <Text style={styles.previewLabel}>Solde estimé</Text>
+              <Text style={[styles.previewValue, tabularAmount]}>
+                {formatMoney(newBalance)}
+                <Text style={styles.previewCurrency}> FCFA</Text>
+              </Text>
             </View>
-            <Text style={styles.feeNote}>Frais : 0 F (offre promotionnelle)</Text>
+            <Text style={styles.feeNote}>
+              Frais :{' '}
+              <Text style={[styles.feeNoteEm, tabularAmount]}>{formatMoney(0)} FCFA</Text>
+              {' '}(offre promotionnelle)
+            </Text>
           </View>
         ) : null}
 
         <View style={styles.securityPill}>
           <Feather name="shield" size={16} color={Colors.success} />
-          <Text style={styles.securityText}>Transfert sécurisé — données chiffrées</Text>
+          <Text style={styles.securityText}>
+            Transfert sécurisé{' '}
+            <Text style={styles.securityEm}>·</Text>
+            {' '}données chiffrées
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -233,7 +263,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleTextWrap: { flex: 1 },
-  title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 26, color: Colors.gray[900], marginBottom: 6 },
+  title: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 26,
+    color: Colors.gray[900],
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
   subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 15, color: Colors.gray[600], lineHeight: 22 },
   balanceHero: {
     marginHorizontal: Theme.spacing.page,
@@ -251,30 +287,56 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.sm,
     textTransform: 'uppercase',
   },
-  balanceLabel: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 8 },
-  balanceValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 34, color: Colors.white },
-  balanceCurrency: { fontSize: 20 },
-  balanceHint: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: Theme.spacing.sm,
-  },
-  sectionEyebrow: {
+  balanceLabel: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,
-    color: Colors.gray[500],
+    color: 'rgba(255,255,255,0.88)',
+    marginBottom: 6,
+    letterSpacing: 0.15,
+  },
+  balanceValue: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 34,
+    color: Colors.white,
+    letterSpacing: -0.5,
+  },
+  balanceCurrency: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 17,
+    color: 'rgba(255,255,255,0.92)',
+    letterSpacing: 1.2,
+  },
+  balanceHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(255,255,255,0.68)',
+    marginTop: Theme.spacing.md,
+  },
+  balanceHintEm: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  sectionHead: {
     paddingHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.sm,
-    letterSpacing: 0.2,
+  },
+  sectionEyebrow: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 12,
+    color: Colors.gray[600],
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: Theme.spacing.xs,
   },
   sectionHint: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 13,
+    lineHeight: 19,
     color: Colors.gray[500],
-    paddingHorizontal: Theme.spacing.page,
-    marginTop: -4,
-    marginBottom: Theme.spacing.md,
+    marginTop: 2,
+    marginBottom: 0,
   },
   surfaceCard: {
     marginHorizontal: Theme.spacing.page,
@@ -287,9 +349,10 @@ const styles = StyleSheet.create({
     ...Theme.shadow.card,
   },
   inCardLabel: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: Colors.gray[600],
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.gray[900],
     marginBottom: Theme.spacing.md,
   },
   amountInputRow: {
@@ -312,8 +375,16 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.spaceGrotesk.bold,
     fontSize: 28,
     color: Colors.gray[900],
+    letterSpacing: -0.3,
   },
-  unit: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[500], paddingRight: Theme.spacing.lg },
+  unit: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 13,
+    color: Colors.gray[500],
+    paddingRight: Theme.spacing.lg,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   errorText: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 13,
@@ -321,11 +392,13 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
   },
   quickLabel: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 12,
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 11,
     color: Colors.gray[500],
     marginBottom: Theme.spacing.sm,
     marginTop: Theme.spacing.sm,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   quickRow: { flexDirection: 'row', gap: Theme.spacing.sm, flexWrap: 'wrap' },
   quickChip: {
@@ -338,61 +411,106 @@ const styles = StyleSheet.create({
   },
   quickChipDisabled: { opacity: 0.38 },
   quickChipSelected: {
-    borderColor: Colors.success,
-    backgroundColor: withOpacity(Colors.success, 0.1),
+    borderColor: Colors.brand,
+    backgroundColor: withOpacity(Colors.brand, 0.08),
   },
-  quickChipText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[700] },
+  quickChipText: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 13,
+    letterSpacing: -0.2,
+    color: Colors.gray[700],
+  },
   quickChipTextDisabled: { color: Colors.gray[400] },
-  quickChipTextSelected: { color: Colors.success },
+  quickChipTextSelected: { color: Colors.brand },
   providerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Theme.spacing.md,
+    justifyContent: 'space-between',
+    rowGap: Theme.spacing.md,
     paddingHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.xl,
   },
-  providerCard: {
-    width: '47%',
-    borderRadius: Theme.radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    position: 'relative',
-  },
-  providerCardInner: {
+  providerCell: {
+    width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.sm,
-  },
-  providerSelected: { borderWidth: 3, borderColor: withOpacity(Colors.brand, 0.45) },
-  providerLogoWrap: {
-    width: 68,
-    height: 36,
     backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  providerName: {
-    flex: 1,
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  checkMark: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Theme.screen.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    paddingVertical: 10,
+    paddingRight: Theme.spacing.sm,
+    paddingLeft: 0,
+    overflow: 'hidden',
+    minHeight: 72,
+    gap: 6,
     ...Theme.shadow.soft,
   },
+  providerCellSelected: {
+    backgroundColor: withOpacity(Colors.brand, 0.07),
+    borderColor: withOpacity(Colors.brand, 0.35),
+  },
+  providerBrandStripe: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
+    minHeight: 40,
+  },
+  providerCellLogo: {
+    width: 72,
+    height: 44,
+    backgroundColor: Colors.gray[50],
+    borderRadius: Theme.radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerCellText: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  providerCellTitle: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.gray[900],
+    marginBottom: 3,
+    letterSpacing: -0.15,
+  },
+  providerCellSubtitle: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 10,
+    lineHeight: 13,
+    color: Colors.gray[500],
+    letterSpacing: 0.2,
+    opacity: 0.9,
+  },
+  radioOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.gray[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterOn: {
+    borderColor: Colors.brand,
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.brand,
+  },
   inputBare: {
-    fontFamily: Fonts.outfit.regular,
+    fontFamily: Fonts.outfit.medium,
     fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: 0.2,
     color: Colors.gray[900],
     paddingVertical: 14,
     paddingHorizontal: Theme.spacing.md,
@@ -411,14 +529,48 @@ const styles = StyleSheet.create({
     borderColor: withOpacity(Colors.success, 0.25),
     ...Theme.shadow.soft,
   },
-  previewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  previewLabel: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[600] },
-  previewValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 20, color: Colors.gray[900] },
+  previewEyebrow: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 11,
+    color: Colors.gray[600],
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  previewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
+  previewLabel: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.gray[600],
+    flex: 1,
+    flexShrink: 1,
+  },
+  previewValue: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 22,
+    color: Colors.success,
+    letterSpacing: -0.35,
+    textAlign: 'right',
+  },
+  previewCurrency: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 14,
+    color: Colors.success,
+    letterSpacing: 0.6,
+    opacity: 0.92,
+  },
   feeNote: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 12,
+    lineHeight: 17,
     color: Colors.gray[500],
     marginTop: Theme.spacing.md,
+  },
+  feeNoteEm: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 12,
+    color: Colors.gray[700],
   },
   securityPill: {
     flexDirection: 'row',
@@ -432,7 +584,14 @@ const styles = StyleSheet.create({
     backgroundColor: withOpacity(Colors.success, 0.08),
     marginBottom: Theme.spacing.xl,
   },
-  securityText: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[600] },
+  securityText: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.gray[600],
+    textAlign: 'center',
+  },
+  securityEm: { color: Colors.gray[400], paddingHorizontal: 2 },
   confirmButton: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Colors.brand,
@@ -442,5 +601,10 @@ const styles = StyleSheet.create({
     ...Theme.shadow.soft,
   },
   confirmDisabled: { backgroundColor: Colors.gray[200], shadowOpacity: 0, elevation: 0 },
-  confirmText: { fontFamily: Fonts.outfit.medium, fontSize: 18, color: Colors.white },
+  confirmText: {
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 17,
+    letterSpacing: 0.2,
+    color: Colors.white,
+  },
 });

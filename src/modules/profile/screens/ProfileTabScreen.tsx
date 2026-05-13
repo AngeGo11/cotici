@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { useAuth, formatFcfaDots, getDisplayFullName, getUserInitials } from '@/shared/auth';
 
 const settingsOptions = [
   { id: 'notifications', label: 'Notifications', description: 'Gérer vos alertes', icon: 'bell' as const, color: Colors.brand },
@@ -15,6 +16,12 @@ const settingsOptions = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const displayName = getDisplayFullName(user) || 'Membre COTICI';
+  const phoneLine = user?.numero_telephone ?? '—';
+  const dateJoined = user?.date_joined ?? '—';
+  const initials = getUserInitials(user);
+  const solde = formatFcfaDots(user?.solde_courant);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -28,11 +35,11 @@ export default function ProfileScreen() {
           <Text style={styles.userTag}>Compte COTICI</Text>
           <View style={styles.userRow}>
             <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>MK</Text>
+              <Text style={styles.userAvatarText}>{initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.userName}>Marie Koné</Text>
-              <Text style={styles.userPhone}>+225 07 12 34 56 78</Text>
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.userPhone}>{phoneLine}</Text>
             </View>
             <TouchableOpacity style={styles.editHint} activeOpacity={0.7} onPress={() => router.push('/edit-profile')}>
               <Feather name="edit-3" size={18} color="rgba(255,255,255,0.9)" />
@@ -41,11 +48,11 @@ export default function ProfileScreen() {
           <View style={styles.balanceBox}>
             <View>
               <Text style={styles.balanceLabel}>Solde total</Text>
-              <Text style={styles.balanceValue}>487.000 F</Text>
+              <Text style={styles.balanceValue}>{solde} F</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.balanceLabel}>Membre depuis</Text>
-              <Text style={styles.memberSince}>Janvier 2024</Text>
+              <Text style={styles.memberSince}>{dateJoined}</Text>
             </View>
           </View>
         </View>
@@ -66,13 +73,7 @@ export default function ProfileScreen() {
             <Text style={[styles.statValue, { color: Colors.success }]}>2</Text>
             <Text style={styles.statLabel}>Objectifs</Text>
           </View>
-          <View style={[styles.statCard, { borderTopColor: Colors.info }]}>
-            <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.info, 0.12) }]}>
-              <Feather name="award" size={20} color={Colors.info} />
-            </View>
-            <Text style={[styles.statValue, { color: Colors.info }]}>98%</Text>
-            <Text style={styles.statLabel}>Fiabilité</Text>
-          </View>
+          
         </View>
 
         <Text style={styles.sectionEyebrow}>Paramètres</Text>

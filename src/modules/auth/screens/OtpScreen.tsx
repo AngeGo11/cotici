@@ -6,9 +6,11 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { useAuth } from '@/shared/auth';
 
 export default function OTPScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const params = useLocalSearchParams<{ challengeId?: string; phoneHint?: string }>();
   const challengeId = typeof params.challengeId === 'string' ? params.challengeId : '';
   const phoneHint = typeof params.phoneHint === 'string' ? params.phoneHint : '';
@@ -45,7 +47,11 @@ export default function OTPScreen() {
         inputRefs.current[0]?.focus();
         return;
       }
-      // TODO: persist access/refresh tokens (SecureStore) when token storage is added.
+      if (typeof data?.access !== 'string' || typeof data?.refresh !== 'string') {
+        setErrorMessage('Réponse serveur invalide.');
+        return;
+      }
+      await signIn({ access: data.access, refresh: data.refresh, user: data.user });
       router.replace('/(tabs)');
     } catch {
       setErrorMessage('Serveur inaccessible. Réessaie dans un instant.');

@@ -37,6 +37,31 @@ const forwardPost = async (req, res, upstreamPath) => {
   }
 };
 
+const forwardGet = async (req, res, upstreamPath) => {
+  try {
+    const auth = req.headers.authorization;
+    const upstreamHeaders = {};
+    if (auth) {
+      upstreamHeaders.Authorization = auth;
+    }
+    const upstream = await fetch(`${BACKEND_BASE_URL}${upstreamPath}`, {
+      method: "GET",
+      headers: upstreamHeaders,
+    });
+    const payload = await upstream.text();
+    res.writeHead(upstream.status, JSON_HEADERS);
+    res.end(payload);
+  } catch (error) {
+    res.writeHead(502, JSON_HEADERS);
+    res.end(
+      JSON.stringify({
+        detail: "Proxy error while reaching auth service.",
+        error: error instanceof Error ? error.message : "Unknown proxy error",
+      }),
+    );
+  }
+};
+
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
     res.writeHead(400, JSON_HEADERS);
@@ -66,6 +91,16 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && req.url === "/api/resend-otp") {
     await forwardPost(req, res, "/api/auth/resend-otp/");
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/refresh") {
+    await forwardPost(req, res, "/api/auth/refresh/");
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/me") {
+    await forwardGet(req, res, "/api/auth/me/");
     return;
   }
 

@@ -6,9 +6,14 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { useAuth, getDisplayFullName } from '@/shared/auth';
+
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const fullname = getDisplayFullName(user);
+  const phoneLine = user?.numero_telephone ?? '—';
   const [name, setName] = useState('Marie Koné');
   const [phone, setPhone] = useState('07 12 34 56 78');
 
@@ -34,7 +39,7 @@ export default function EditProfileScreen() {
           <View style={styles.field}>
             <Text style={styles.label}>Nom complet</Text>
             <TextInput
-              value={name}
+              value={fullname}
               onChangeText={setName}
               placeholder="Votre nom"
               placeholderTextColor={Colors.gray[400]}
@@ -44,7 +49,7 @@ export default function EditProfileScreen() {
           <View style={styles.field}>
             <Text style={styles.label}>Téléphone</Text>
             <TextInput
-              value={phone}
+              value={phoneLine}
               onChangeText={setPhone}
               placeholder="07 XX XX XX XX"
               placeholderTextColor={Colors.gray[400]}

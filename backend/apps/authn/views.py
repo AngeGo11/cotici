@@ -318,6 +318,10 @@ def verify_otp(request):
             "user": {
                 "id": user.id,
                 "username": user.username,
+                "email": user.email or "",
+                "first_name": user.first_name or "",
+                "last_name": user.last_name or "",
+                "date_joined": user.date_joined,
                 "numero_telephone": user.numero_telephone,
                 "solde_courant": wallet.solde_courant,
             },
@@ -335,6 +339,9 @@ def me(request):
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "date_joined": user.date_joined,
         "numero_telephone": user.numero_telephone,
         "solde_courant": wallet.solde_courant,
     })

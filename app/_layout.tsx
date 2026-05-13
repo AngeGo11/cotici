@@ -18,6 +18,7 @@ import {
 import * as SplashScreen from 'expo-system-ui';
 import { Colors } from '@/shared/theme/Colors';
 import { Theme } from '@/shared/theme/Theme';
+import { AuthProvider } from '@/shared/auth';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -37,7 +38,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -83,6 +84,6 @@ export default function RootLayout() {
         <Stack.Screen name="solidarity-aid-history" />
         <Stack.Screen name="edit-profile" />
       </Stack>
-    </>
+    </AuthProvider>
   );
 }
