@@ -15,39 +15,30 @@ const readBody = async (req) => {
   return Buffer.concat(chunks).toString("utf8") || "{}";
 };
 
-const forwardPost = async (req, res, upstreamPath) => {
+/**
+ * Transfère la requête vers le backend Django (corps JSON pour POST/PUT/PATCH).
+ * @param {object} options
+ * @param {string} [options.method="POST"]
+ * @param {string} options.upstreamPath — chemin sur le backend, ex. /api/auth/login/
+ * @param {boolean} [options.forwardBearer=false] — reprend Authorization: Bearer … du client
+ */
+const proxyToDjango = async (req, res, options) => {
+  const { method = "POST", upstreamPath, forwardBearer = false } = options;
   try {
-    const body = await readBody(req);
-    const upstream = await fetch(`${BACKEND_BASE_URL}${upstreamPath}`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body,
-    });
-    const payload = await upstream.text();
-    res.writeHead(upstream.status, JSON_HEADERS);
-    res.end(payload);
-  } catch (error) {
-    res.writeHead(502, JSON_HEADERS);
-    res.end(
-      JSON.stringify({
-        detail: "Proxy error while reaching auth service.",
-        error: error instanceof Error ? error.message : "Unknown proxy error",
-      }),
-    );
-  }
-};
-
-const forwardGet = async (req, res, upstreamPath) => {
-  try {
-    const auth = req.headers.authorization;
-    const upstreamHeaders = {};
-    if (auth) {
-      upstreamHeaders.Authorization = auth;
+    const headers = {};
+    const hasBody = method !== "GET" && method !== "HEAD";
+    if (hasBody) {
+      headers["Content-Type"] = "application/json";
     }
-    const upstream = await fetch(`${BACKEND_BASE_URL}${upstreamPath}`, {
-      method: "GET",
-      headers: upstreamHeaders,
-    });
+    if (forwardBearer && req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    const init = {
+      method,
+      headers,
+      ...(hasBody ? { body: await readBody(req) } : {}),
+    };
+    const upstream = await fetch(`${BACKEND_BASE_URL}${upstreamPath}`, init);
     const payload = await upstream.text();
     res.writeHead(upstream.status, JSON_HEADERS);
     res.end(payload);
@@ -55,7 +46,7 @@ const forwardGet = async (req, res, upstreamPath) => {
     res.writeHead(502, JSON_HEADERS);
     res.end(
       JSON.stringify({
-        detail: "Proxy error while reaching auth service.",
+        detail: "Proxy error while reaching backend.",
         error: error instanceof Error ? error.message : "Unknown proxy error",
       }),
     );
@@ -70,37 +61,106 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/api/login") {
-    await forwardPost(req, res, "/api/auth/login/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/login/" });
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/register") {
-    await forwardPost(req, res, "/api/auth/register/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/register/" });
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/request-otp") {
-    await forwardPost(req, res, "/api/auth/request-otp/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/request-otp/" });
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/verify-otp") {
-    await forwardPost(req, res, "/api/auth/verify-otp/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/verify-otp/" });
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/resend-otp") {
-    await forwardPost(req, res, "/api/auth/resend-otp/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/resend-otp/" });
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/refresh") {
-    await forwardPost(req, res, "/api/auth/refresh/");
+    await proxyToDjango(req, res, { upstreamPath: "/api/auth/refresh/" });
     return;
   }
 
   if (req.method === "GET" && req.url === "/api/me") {
-    await forwardGet(req, res, "/api/auth/me/");
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/auth/me/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/wallet/deposit/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/wallet/deposit/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/wallet/withdrawal/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/wallet/withdrawal/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/create/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/create/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/regles/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/regles/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/penalites/attribuer/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/penalites/attribuer/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/tours/changer/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/tours/changer/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/invitations/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/invitations/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+
+  if (req.method === "POST" && req.url === "/api/savings/create/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/savings/create/",
+      forwardBearer: true,
+    });
     return;
   }
 
