@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -14,9 +20,9 @@ export default function SolidarityAidHistoryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Historique des aides</Text>
         <View style={styles.backButton} />
       </View>

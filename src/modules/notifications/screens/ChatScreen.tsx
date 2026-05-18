@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -62,18 +71,18 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           <View style={styles.chatAvatar}><Feather name="users" size={24} color={Colors.white} /></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.chatTitle} numberOfLines={1}>Tontine Entrepreneurs</Text>
             <Text style={styles.chatSubtitle}>12 Membres</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.moreButton}>
+        <AnimatedPressable style={styles.moreButton}>
           <Feather name="more-vertical" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       <FlatList
@@ -86,9 +95,9 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.inputArea}>
-          <TouchableOpacity style={styles.attachButton}>
+          <AnimatedPressable style={styles.attachButton}>
             <Feather name="paperclip" size={20} color={Colors.gray[600]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           <TextInput
             style={styles.textInput}
             value={messageText}
@@ -96,9 +105,9 @@ export default function ChatScreen() {
             placeholder="Écrire un message..."
             placeholderTextColor={Colors.gray[500]}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={() => setMessageText('')}>
+          <AnimatedPressable style={styles.sendButton} onPress={() => setMessageText('')}>
             <Feather name="send" size={20} color={Colors.white} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

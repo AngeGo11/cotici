@@ -1,31 +1,33 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-
-const tontines = [
-  { id: '1', name: 'Tontine Famille', members: 8, turn: '3/12', amount: 80000, status: 'active' as const, isSolidarity: false as const },
-  { id: '2', name: 'Tontine Entrepreneurs', members: 12, turn: '5/12', amount: 120000, status: 'active' as const, isSolidarity: false as const },
-  { id: '3', name: 'Tontine Solidaire Commerçants', members: 6, turn: '2/6', amount: 50000, status: 'active' as const, isSolidarity: true as const },
-];
+import {
+  getTontineListBadge,
+  getTontinesForList,
+  parseTurn,
+} from '@/modules/tontine/data/tontines';
+import { getTontinePhaseState } from '@/modules/tontine/data/tontinePhase';
+import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
 
 const statusLabel = {
   active: { text: 'Actif', color: Colors.success, bg: withOpacity(Colors.success, 0.12) },
+  paused: { text: 'En pause', color: Colors.gray[500], bg: withOpacity(Colors.gray[500], 0.12) },
 };
-
-function parseTurn(turn: string): { current: number; total: number; pct: number } {
-  const parts = turn.split('/').map((x) => parseInt(x, 10));
-  const current = parts[0] || 0;
-  const total = parts[1] || 1;
-  const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
-  return { current, total, pct };
-}
 
 export default function TontineListScreen() {
   const router = useRouter();
+  useTontinePhase('2');
+  const tontines = getTontinesForList();
 
   const totalCotisations = tontines.reduce((s, t) => s + t.amount, 0);
   const avgCyclePct =
@@ -45,14 +47,12 @@ export default function TontineListScreen() {
               Cotisez en groupe et suivez l&apos;avancement de chaque cycle
             </Text>
           </View>
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.addButton}
             onPress={() => router.push('/create-savings')}
-            accessibilityLabel="Créer une tontine ou un projet"
-            activeOpacity={0.9}
-          >
+            accessibilityLabel="Créer une tontine ou un projet" >
             <Feather name="plus" size={22} color={Colors.white} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.summaryHero}>
@@ -78,14 +78,31 @@ export default function TontineListScreen() {
         <Text style={styles.sectionEyebrow}>Vos groupes</Text>
 
         {tontines.map((tontine) => {
-          const status = statusLabel[tontine.status];
-          const { current, total, pct } = parseTurn(tontine.turn);
+          const live = getTontinePhaseState(tontine.id);
+          const phase = live?.phase ?? tontine.phase;
+          const flowBadge = getTontineListBadge(tontine);
+          const status = tontine.status === 'paused' ? statusLabel.paused : flowBadge ?? statusLabel.active;
+          let displayTurn = tontine.turn;
+          if (phase === 'active' && live?.ordrePublie && displayTurn.startsWith('0/')) {
+            const { total } = parseTurn(displayTurn);
+            displayTurn = `1/${total}`;
+          }
+          const { current, total, pct } = parseTurn(displayTurn);
+          const membresLabel = live
+            ? `${live.membresActifs}/${live.nombreMax} membres`
+            : `${tontine.members} membres`;
+
           return (
-            <TouchableOpacity
+            <AnimatedPressable
               key={tontine.id}
               style={styles.tontineCard}
-              onPress={() => router.push(tontine.isSolidarity ? '/solidarity' : '/tontine-details')}
-              activeOpacity={0.85}
+              onPress={() =>
+                router.push(
+                  tontine.isSolidarity
+                    ? '/solidarity'
+                    : { pathname: '/tontine-details', params: { id: tontine.id } },
+                )
+              }
             >
               <View style={styles.cardTop}>
                 <View style={styles.cardIcon}>
@@ -95,7 +112,7 @@ export default function TontineListScreen() {
                   <Text style={styles.tontineName}>{tontine.name}</Text>
                   <View style={styles.metaRow}>
                     <Feather name="user" size={13} color={Colors.gray[500]} />
-                    <Text style={styles.tontineMembers}>{tontine.members} membres</Text>
+                    <Text style={styles.tontineMembers}>{membresLabel}</Text>
                   </View>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
@@ -103,17 +120,26 @@ export default function TontineListScreen() {
                 </View>
               </View>
 
-              <View style={styles.turnBlock}>
-                <View style={styles.turnHeader}>
-                  <Text style={styles.turnLabel}>Cycle en cours</Text>
-                  <Text style={styles.turnFraction}>
-                    Tour {current}/{total}
+              {phase === 'awaiting_ordre' ? (
+                <View style={styles.awaitingBlock}>
+                  <Feather name="list" size={16} color={Colors.accent} />
+                  <Text style={styles.awaitingText}>
+                    Groupe complet — définissez l&apos;ordre de ramassage pour démarrer
                   </Text>
                 </View>
-                <View style={styles.turnTrack}>
-                  <View style={[styles.turnFill, { width: `${pct}%` }]} />
+              ) : (
+                <View style={styles.turnBlock}>
+                  <View style={styles.turnHeader}>
+                    <Text style={styles.turnLabel}>Cycle en cours</Text>
+                    <Text style={styles.turnFraction}>
+                      Tour {current}/{total}
+                    </Text>
+                  </View>
+                  <View style={styles.turnTrack}>
+                    <View style={[styles.turnFill, { width: `${pct}%` }]} />
+                  </View>
                 </View>
-              </View>
+              )}
 
               <View style={styles.cardBottom}>
                 <View>
@@ -124,7 +150,7 @@ export default function TontineListScreen() {
                   <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
                 </View>
               </View>
-            </TouchableOpacity>
+            </AnimatedPressable>
           );
         })}
 
@@ -254,6 +280,24 @@ const styles = StyleSheet.create({
   tontineMembers: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Theme.radius.pill },
   statusText: { fontFamily: Fonts.outfit.medium, fontSize: 11 },
+  awaitingBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.md,
+    backgroundColor: withOpacity(Colors.accent, 0.08),
+    borderRadius: Theme.radius.md,
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.accent, 0.2),
+  },
+  awaitingText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[700],
+    lineHeight: 18,
+  },
   turnBlock: { marginBottom: Theme.spacing.lg },
   turnHeader: {
     flexDirection: 'row',

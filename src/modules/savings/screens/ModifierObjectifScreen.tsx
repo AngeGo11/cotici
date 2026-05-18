@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -23,6 +30,7 @@ export default function ModifierObjectifScreen() {
   const [targetAmount, setTargetAmount] = useState(INITIAL.targetAmount);
   const [duration, setDuration] = useState(INITIAL.duration);
   const [category, setCategory] = useState(INITIAL.category);
+  const [otherCategory, setOtherCategory] = useState('');
 
   const monthlyAmount =
     targetAmount && duration
@@ -32,7 +40,8 @@ export default function ModifierObjectifScreen() {
   const canSave =
     goalName.trim().length > 0 &&
     Number(targetAmount.replace(/\s/g, '')) > 0 &&
-    Number(duration) > 0;
+    Number(duration) > 0 &&
+    (category !== 'Autre' || otherCategory.trim().length > 0);
 
   const onSave = () => {
     if (!canSave) return;
@@ -43,9 +52,9 @@ export default function ModifierObjectifScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.titleRow}>
@@ -93,15 +102,32 @@ export default function ModifierObjectifScreen() {
         <Text style={styles.label}>Catégorie</Text>
         <View style={styles.categoryGrid}>
           {categories.map((c) => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={c}
               style={[styles.categoryChip, category === c && styles.categoryChipActive]}
-              onPress={() => setCategory(c)}
+              onPress={() => {
+                setCategory(c);
+                if (c !== 'Autre') setOtherCategory('');
+              }}
             >
               <Text style={[styles.categoryText, category === c && styles.categoryTextActive]}>{c}</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
         </View>
+
+        {category === 'Autre' && (
+          <>
+            <Text style={styles.label}>Précisez la catégorie</Text>
+            <TextInput
+              style={styles.input}
+              value={otherCategory}
+              onChangeText={setOtherCategory}
+              placeholder="Ex : Achat véhicule, rénovation…"
+              placeholderTextColor={Colors.gray[400]}
+              autoFocus
+            />
+          </>
+        )}
 
         {monthlyAmount > 0 ? (
           <View style={styles.previewCard}>
@@ -121,7 +147,7 @@ export default function ModifierObjectifScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
           onPress={onSave}
           disabled={!canSave}
@@ -129,7 +155,7 @@ export default function ModifierObjectifScreen() {
           <Text style={[styles.saveButtonText, !canSave && { color: Colors.gray[400] }]}>
             Enregistrer les modifications
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <Text style={styles.footerNote}>Les montants déjà épargnés ne sont pas modifiés</Text>
         <View style={{ height: 32 }} />

@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -43,9 +50,9 @@ export default function DepositToAccountScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.titleBlock}>
@@ -101,7 +108,7 @@ export default function DepositToAccountScreen() {
             {quickAmounts.map((a) => {
               const selected = depositAmount === a.toString();
               return (
-                <TouchableOpacity
+                <AnimatedPressable
                   key={a}
                   style={[styles.quickChip, selected && styles.quickChipSelected]}
                   onPress={() => setDepositAmount(a.toString())}
@@ -109,7 +116,7 @@ export default function DepositToAccountScreen() {
                   <Text style={[styles.quickChipText, selected && styles.quickChipTextSelected, tabularAmount]}>
                     {formatMoney(a)} F
                   </Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               );
             })}
           </ScrollView>
@@ -123,12 +130,10 @@ export default function DepositToAccountScreen() {
           {providers.map((p) => {
             const selected = selectedProvider === p.id;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={p.id}
                 style={[styles.providerCell, selected && styles.providerCellSelected]}
-                onPress={() => setSelectedProvider(p.id)}
-                activeOpacity={0.88}
-                accessibilityRole="radio"
+                onPress={() => setSelectedProvider(p.id)} accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${p.name}, Mobile Money`}
               >
@@ -145,7 +150,7 @@ export default function DepositToAccountScreen() {
                 <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
                   {selected ? <View style={styles.radioInner} /> : null}
                 </View>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -187,16 +192,14 @@ export default function DepositToAccountScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.confirmButton, (!selectedProvider || !depositAmount) && styles.confirmDisabled]}
           disabled={!selectedProvider || !depositAmount}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'deposit' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'deposit' } })} >
           <Text style={[styles.confirmText, (!selectedProvider || !depositAmount) && { color: Colors.gray[400] }]}>
             Confirmer le dépôt
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>

@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
@@ -9,8 +16,8 @@ import { Theme } from '@/shared/theme/Theme';
 import { PaymentProviderMark } from '@/components/PaymentProviderMark';
 import type { PaymentProvider } from '@/types';
 
-const PAY_AMOUNT_F = 10_000;
 const FEE_F = 0;
+const DEFAULT_PAY_AMOUNT_F = 10_000;
 
 const providers = [
   { id: 'orange' as const, name: 'Orange Money', bg: Colors.provider.orange, text: Colors.white },
@@ -28,18 +35,37 @@ const tabularAmount = { fontVariant: ['tabular-nums' as const] };
 
 export default function MakeDepositScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    tontineId?: string;
+    tontineName?: string;
+    turn?: string;
+    amount?: string;
+  }>();
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>(null);
   const [phoneNumber, setPhoneNumber] = useState('+225 07 08 09 10 11');
 
-  const total = PAY_AMOUNT_F + FEE_F;
+  const tontineName =
+    typeof params.tontineName === 'string' && params.tontineName
+      ? params.tontineName
+      : 'Tontine';
+  const tourNumber =
+    typeof params.turn === 'string' && params.turn ? params.turn : '3';
+  const parsedAmount = params.amount ? Number(params.amount) : NaN;
+  const payAmount =
+    Number.isFinite(parsedAmount) && parsedAmount > 0
+      ? parsedAmount
+      : DEFAULT_PAY_AMOUNT_F;
+  const payMotif = `Cotisation — ${tontineName} — Tour ${tourNumber}`;
+
+  const total = payAmount + FEE_F;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.titleBlock}>
@@ -59,7 +85,7 @@ export default function MakeDepositScreen() {
           <View style={styles.payTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.payLabel}>Motif</Text>
-              <Text style={styles.payMotif}>Cotisation tontine — Tour 3</Text>
+              <Text style={styles.payMotif}>{payMotif}</Text>
             </View>
             <View style={styles.payMotifIcon}>
               <Feather name="users" size={22} color={Colors.success} />
@@ -68,7 +94,7 @@ export default function MakeDepositScreen() {
           <View style={styles.payDivider} />
           <Text style={styles.payAmountLabel}>Montant</Text>
           <Text style={[styles.payAmount, tabularAmount]}>
-            {`${formatMoney(PAY_AMOUNT_F)}\u202f`}
+            {`${formatMoney(payAmount)}\u202f`}
             <Text style={styles.payAmountCurrency}>FCFA</Text>
           </Text>
         </View>
@@ -81,12 +107,10 @@ export default function MakeDepositScreen() {
           {providers.map((p) => {
             const selected = selectedProvider === p.id;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={p.id}
                 style={[styles.providerCell, selected && styles.providerCellSelected]}
-                onPress={() => setSelectedProvider(p.id)}
-                activeOpacity={0.88}
-                accessibilityRole="radio"
+                onPress={() => setSelectedProvider(p.id)} accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${p.name}, Mobile Money`}
               >
@@ -103,7 +127,7 @@ export default function MakeDepositScreen() {
                 <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
                   {selected ? <View style={styles.radioInner} /> : null}
                 </View>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -128,7 +152,7 @@ export default function MakeDepositScreen() {
           <View style={styles.recapRow}>
             <Text style={styles.recapLabel}>Montant cotisation</Text>
             <Text style={[styles.recapValueNum, tabularAmount]}>
-              {formatMoney(PAY_AMOUNT_F)}
+              {formatMoney(payAmount)}
               <Text style={styles.recapValueCurrency}> FCFA</Text>
             </Text>
           </View>
@@ -158,17 +182,15 @@ export default function MakeDepositScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.confirmButton, !selectedProvider && styles.confirmDisabled]}
           disabled={!selectedProvider}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'payment' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'payment' } })} >
           <Feather name="check-circle" size={20} color={selectedProvider ? Colors.white : Colors.gray[400]} />
           <Text style={[styles.confirmText, !selectedProvider && { color: Colors.gray[400] }]}>
             Confirmer le paiement
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <View style={{ height: 40 }} />
       </ScrollView>

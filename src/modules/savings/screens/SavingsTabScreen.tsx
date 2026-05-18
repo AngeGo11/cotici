@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -65,13 +71,13 @@ export default function SavingsListScreen() {
               Suivez vos projets et atteignez vos cibles pas à pas
             </Text>
           </View>
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.addButton}
             onPress={() => router.push('/create-savings')}
             accessibilityLabel="Nouveau projet"
           >
             <Feather name="plus" size={22} color={Colors.white} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.summaryHero}>
@@ -97,12 +103,10 @@ export default function SavingsListScreen() {
         {goals.map((goal) => {
           const pct = Math.round((goal.saved / goal.target) * 100);
           return (
-            <TouchableOpacity
+            <AnimatedPressable
               key={goal.id}
               style={styles.goalCard}
-              onPress={() => router.push('/savings-detail')}
-              activeOpacity={0.85}
-            >
+              onPress={() => router.push('/savings-detail')} >
               <View style={styles.goalTop}>
                 <View style={styles.goalLeft}>
                   <View style={styles.goalIcon}>
@@ -118,7 +122,7 @@ export default function SavingsListScreen() {
                 <MiniProgress percentage={pct} />
               </View>
               <GoalBar pct={pct} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           );
         })}
 

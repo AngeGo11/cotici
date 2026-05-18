@@ -1,15 +1,15 @@
 import { useState, useRef, type MutableRefObject } from 'react';
-import {
+import { 
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Image,
-} from 'react-native';
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -128,9 +128,9 @@ export default function CreateAccountScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           <View style={styles.headerLogo}>
             <Image source={require('../../../../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
             <Text style={styles.logoStyle}>COTICI</Text>
@@ -249,11 +249,9 @@ export default function CreateAccountScreen() {
             ) : null}
           </View>
 
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.termsRow}
-            onPress={() => setAcceptedTerms(!acceptedTerms)}
-            activeOpacity={0.7}
-          >
+            onPress={() => setAcceptedTerms(!acceptedTerms)} >
             <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
               {acceptedTerms ? (
                 <Feather name="check" size={14} color={Colors.white} />
@@ -262,25 +260,25 @@ export default function CreateAccountScreen() {
             <Text style={styles.termsText}>
               J'accepte les conditions d'utilisation et la politique de confidentialité
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
 
-          <TouchableOpacity
+          <AnimatedPressable
             style={[styles.submitButton, (!canSubmit || isSubmitting) && styles.submitButtonDisabled]}
             onPress={onSubmit}
             disabled={!canSubmit || isSubmitting}
           >
             <Text style={styles.submitButtonText}>{isSubmitting ? 'Création...' : 'Continuer'}</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
           {!!errorMessage && <Text style={styles.errorHint}>{errorMessage}</Text>}
 
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.loginLinkWrap}
             onPress={() => router.push('/login')}
           >
             <Text style={styles.loginLink}>
               Déjà un compte ? <Text style={styles.loginLinkBold}>Se connecter</Text>
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

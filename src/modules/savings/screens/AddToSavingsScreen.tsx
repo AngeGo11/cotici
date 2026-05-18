@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -23,7 +30,7 @@ export default function AddToSavingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}><TouchableOpacity style={styles.backButton} onPress={() => router.back()}><Feather name="chevron-left" size={20} color={Colors.gray[700]} /></TouchableOpacity></View>
+        <View style={styles.header}><AnimatedPressable style={styles.backButton} onPress={() => router.back()}><Feather name="chevron-left" size={20} color={Colors.gray[700]} /></AnimatedPressable></View>
         <View style={styles.titleRow}><View style={styles.titleIcon}><Feather name="dollar-sign" size={24} color={Colors.success} /></View><Text style={styles.title}>Ajouter de l'argent</Text></View>
         <Text style={styles.subtitle}>Contribuez à votre objectif d'épargne</Text>
 
@@ -44,13 +51,13 @@ export default function AddToSavingsScreen() {
         <View style={styles.amountInputRow}><TextInput style={styles.amountInput} value={addAmount} onChangeText={setAddAmount} placeholder="Entrez le montant" placeholderTextColor={Colors.gray[400]} keyboardType="number-pad" /><Text style={styles.unit}>FCFA</Text></View>
         <Text style={styles.quickLabel}>Montants rapides</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickScroll} contentContainerStyle={styles.quickRow}>
-          {quickAmounts.map((a) => (<TouchableOpacity key={a} style={styles.quickChip} onPress={() => setAddAmount(a.toString())}><Text style={styles.quickChipText}>{a.toLocaleString('fr-FR')} F</Text></TouchableOpacity>))}
+          {quickAmounts.map((a) => (<AnimatedPressable key={a} style={styles.quickChip} onPress={() => setAddAmount(a.toString())}><Text style={styles.quickChipText}>{a.toLocaleString('fr-FR')} F</Text></AnimatedPressable>))}
         </ScrollView>
 
-        <TouchableOpacity style={styles.completeButton} onPress={() => setAddAmount((targetAmount - currentAmount).toString())}>
+        <AnimatedPressable style={styles.completeButton} onPress={() => setAddAmount((targetAmount - currentAmount).toString())}>
           <Text style={styles.completeLabel}>Compléter l'objectif</Text>
           <Text style={styles.completeValue}>{(targetAmount - currentAmount).toLocaleString('fr-FR')} F</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         {newTotal !== null && (
           <View style={styles.progressCard}>
@@ -62,9 +69,9 @@ export default function AddToSavingsScreen() {
           </View>
         )}
 
-        <TouchableOpacity style={[styles.confirmButton, (!addAmount || Number(addAmount) <= 0) && styles.confirmDisabled]} disabled={!addAmount || Number(addAmount) <= 0} onPress={() => router.push({ pathname: '/success', params: { type: 'savings' } })}>
+        <AnimatedPressable style={[styles.confirmButton, (!addAmount || Number(addAmount) <= 0) && styles.confirmDisabled]} disabled={!addAmount || Number(addAmount) <= 0} onPress={() => router.push({ pathname: '/success', params: { type: 'savings' } })}>
           <Text style={[styles.confirmText, (!addAmount || Number(addAmount) <= 0) && { color: Colors.gray[400] }]}>Ajouter à mon épargne</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>

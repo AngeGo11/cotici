@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -13,9 +19,9 @@ export default function ActivitesRecentesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Activités récentes</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -23,12 +29,10 @@ export default function ActivitesRecentesScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {RECENT_ACTIVITIES.map((activity) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={activity.id}
             style={styles.activityItem}
-            onPress={() => router.push(`/activite/${activity.id}`)}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push(`/activite/${activity.id}`)} >
             <View style={styles.activityLeft}>
               <View
                 style={[
@@ -64,7 +68,7 @@ export default function ActivitesRecentesScreen() {
               </Text>
               <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
             </View>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
         <View style={{ height: 32 }} />
       </ScrollView>

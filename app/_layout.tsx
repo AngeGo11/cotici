@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import 'react-native-reanimated';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import {
   SpaceGrotesk_400Regular,
@@ -15,10 +16,8 @@ import {
   Outfit_600SemiBold,
   Outfit_700Bold,
 } from '@expo-google-fonts/outfit';
-import * as SplashScreen from 'expo-system-ui';
-import { Colors } from '@/shared/theme/Colors';
-import { Theme } from '@/shared/theme/Theme';
 import { AuthProvider } from '@/shared/auth';
+import { stackModalScreenOptions, stackScreenOptions } from '@/shared/ui';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -38,14 +37,10 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Theme.screen.bg },
-        }}
-      >
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={stackScreenOptions}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="create-account" />
@@ -56,6 +51,10 @@ export default function RootLayout() {
         <Stack.Screen name="solidarity" />
         <Stack.Screen name="chat" />
         <Stack.Screen name="admin" />
+        <Stack.Screen
+          name="definir-ordre-ramassage"
+          options={stackModalScreenOptions}
+        />
         <Stack.Screen name="modifier-regles" />
         <Stack.Screen name="exclure-membre" />
         <Stack.Screen name="create-savings" />
@@ -64,9 +63,10 @@ export default function RootLayout() {
         <Stack.Screen name="create-personal-goal" />
         <Stack.Screen name="modifier-objectif" />
         <Stack.Screen name="create-association-fund" />
-        <Stack.Screen name="make-deposit" />
-        <Stack.Screen name="deposit-to-account" />
-        <Stack.Screen name="retrait" />
+        <Stack.Screen name="choose-tontine-cotisation" />
+        <Stack.Screen name="make-deposit" options={stackModalScreenOptions} />
+        <Stack.Screen name="deposit-to-account" options={stackModalScreenOptions} />
+        <Stack.Screen name="retrait" options={stackModalScreenOptions} />
         <Stack.Screen name="activites-recentes" />
         <Stack.Screen name="prochaines-echeances" />
         <Stack.Screen name="notifications" />
@@ -74,7 +74,7 @@ export default function RootLayout() {
         <Stack.Screen name="new-invitation" />
         <Stack.Screen name="activite/[id]" />
         <Stack.Screen name="add-to-savings" />
-        <Stack.Screen name="success" />
+        <Stack.Screen name="success" options={stackModalScreenOptions} />
         <Stack.Screen name="nav-preview" />
         <Stack.Screen name="security" />
         <Stack.Screen name="help-support" />
@@ -83,7 +83,8 @@ export default function RootLayout() {
         <Stack.Screen name="savings-history" />
         <Stack.Screen name="solidarity-aid-history" />
         <Stack.Screen name="edit-profile" />
-      </Stack>
-    </AuthProvider>
+        </Stack>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

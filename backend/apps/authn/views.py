@@ -17,6 +17,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import OtpChallenge
 from .serializers import RegisterSerializer, RequestOtpSerializer, VerifyOtpSerializer
 from apps.wallet.models import Wallet
+from ..savings.models import EpargnePersonnelle
+from ..tontine.models import Tontine, TontineMembre
 
 logger = logging.getLogger(__name__)
 OTP_LENGTH = 4
@@ -71,6 +73,42 @@ def _send_sms(phone, otp_code):
 
 def health(request):
     return JsonResponse({"module": "authn", "status": "ok"})
+
+
+def count_tontine_actif(request):
+    user = request.user
+    if not user.is_authenticated:
+        return Response(
+            {"detail": "Utilisateur non trouvé."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Tontine.objects.filter(
+        tontinemembre__membre=user,
+        tontinemembre__statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+    ).distinct().count()
+
+def count_tontine_by_user(request):
+    user = request.user
+    if not user.is_authenticated:
+        return Response(
+            {"detail": "Utilisateur non trouvé."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Tontine.objects.filter(hote=user).count()
+
+def count_savings(request):
+    user = request.user
+    if not user.is_authenticated:
+        return Response(
+            {"detail": "Utilisateur non trouvé."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return EpargnePersonnelle.objects.filter(
+        hote=user,
+    ).count()
 
 @api_view(["POST"])
 @permission_classes([AllowAny])

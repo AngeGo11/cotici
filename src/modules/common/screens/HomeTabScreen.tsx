@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -48,10 +54,10 @@ export default function HomeScreen() {
               <Text style={styles.dateLine}>{dateLabel}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.bellButton} onPress={() => router.push('/notifications')}>
+          <AnimatedPressable style={styles.bellButton} onPress={() => router.push('/notifications')}>
             <Feather name="bell" size={20} color={Colors.gray[700]} />
             <View style={styles.bellDot} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.balanceCard}>
@@ -60,12 +66,12 @@ export default function HomeScreen() {
               <Text style={styles.balanceAccountTag}>Compte principal</Text>
               <Text style={styles.balanceLabel}>Solde disponible</Text>
             </View>
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.eyeButton}
               onPress={() => setBalanceVisible(!balanceVisible)}
             >
               <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={15} color={Colors.white} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
           <View>
             {balanceVisible ? (
@@ -98,11 +104,9 @@ export default function HomeScreen() {
 
         <Text style={styles.quickActionsTitle}>Mon argent</Text>
         <View style={styles.quickActionsCard}>
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.quickActionHalf}
-            onPress={() => router.push('/deposit-to-account')}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push('/deposit-to-account')} >
             <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(accentColor, 0.12) }]}>
               <Feather name="arrow-down-left" size={22} color={accentColor} />
             </View>
@@ -110,13 +114,11 @@ export default function HomeScreen() {
               <Text style={styles.quickActionTitle}>Dépôt</Text>
               <Text style={styles.quickActionHint}>Vers votre solde COTICI</Text>
             </View>
-          </TouchableOpacity>
+          </AnimatedPressable>
           <View style={styles.quickActionsSep} />
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.quickActionHalf}
-            onPress={() => router.push('/retrait')}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push('/retrait')} >
             <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
               <Feather name="arrow-up-right" size={22} color={Colors.success} />
             </View>
@@ -124,34 +126,28 @@ export default function HomeScreen() {
               <Text style={styles.quickActionTitle}>Retrait</Text>
               <Text style={styles.quickActionHint}>Vers Mobile Money</Text>
             </View>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.navLinks}>
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.navLinkButton}
-            onPress={() => router.push('/(tabs)/savings')}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push('/(tabs)/savings')} >
             <Feather name="target" size={20} color={accentColor} />
             <Text style={styles.navLinkText}>Voir mes objectifs</Text>
             <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.navLinkButton}
-            onPress={() => router.push('/(tabs)/tontine')}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push('/(tabs)/tontine')} >
             <Feather name="users" size={20} color={accentColor} />
             <Text style={styles.navLinkText}>Voir mes tontines</Text>
             <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           {upcomingCount > 0 ? (
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.navLinkButton}
-              onPress={() => router.push('/prochaines-echeances')}
-              activeOpacity={0.7}
-            >
+              onPress={() => router.push('/prochaines-echeances')} >
               <Feather name="clock" size={20} color={accentColor} />
               <Text style={styles.navLinkText}>Prochaines échéances</Text>
               <View style={styles.navLinkCountBadge}>
@@ -160,24 +156,22 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           ) : null}
         </View>
 
         <View style={styles.activityHeader}>
           <Text style={styles.activityTitle}>Activités récentes</Text>
-          <TouchableOpacity onPress={() => router.push('/activites-recentes')}>
+          <AnimatedPressable onPress={() => router.push('/activites-recentes')}>
             <Text style={styles.seeAll}>Voir tout</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         {RECENT_ACTIVITIES.map((activity) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={activity.id}
             style={styles.activityItem}
-            onPress={() => router.push(`/activite/${activity.id}`)}
-            activeOpacity={0.7}
-          >
+            onPress={() => router.push(`/activite/${activity.id}`)} >
             <View style={styles.activityLeft}>
               <View style={[styles.activityIcon, {
                 backgroundColor: activity.amount > 0 ? withOpacity(Colors.success, 0.1) : withOpacity(Colors.danger, 0.06),
@@ -198,7 +192,7 @@ export default function HomeScreen() {
             }]}>
               {activity.amount > 0 ? '+' : ''}{activity.amount.toLocaleString('fr-FR')}F
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
 
         <View style={{ height: 24 }} />

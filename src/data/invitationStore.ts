@@ -41,6 +41,12 @@ function randomCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
+/** Lien de rejoindre une tontine (QR code, partage). */
+export function buildTontineInviteLink(tontineId: string): string {
+  const code = tontineId.replace(/\W/g, '').toUpperCase() || randomCode();
+  return `https://cotici.app/join/${code}`;
+}
+
 export function buildOutgoingInvitation(input: {
   inviteeName: string;
   numTel: string;

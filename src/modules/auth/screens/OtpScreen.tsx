@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Image,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -106,9 +113,9 @@ export default function OTPScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <View style={styles.headerLogo}>
           <Image source={require('../../../../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
         </View>
@@ -147,9 +154,9 @@ export default function OTPScreen() {
               <Text style={styles.timerValue}>{timer}s</Text>
             </Text>
           ) : (
-            <TouchableOpacity onPress={handleResend}>
+            <AnimatedPressable onPress={handleResend}>
               <Text style={styles.resendText}>Renvoyer le code</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
         </View>
         {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}

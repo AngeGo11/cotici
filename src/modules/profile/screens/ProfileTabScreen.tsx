@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -41,9 +47,9 @@ export default function ProfileScreen() {
               <Text style={styles.userName}>{displayName}</Text>
               <Text style={styles.userPhone}>{phoneLine}</Text>
             </View>
-            <TouchableOpacity style={styles.editHint} activeOpacity={0.7} onPress={() => router.push('/edit-profile')}>
+            <AnimatedPressable style={styles.editHint} onPress={() => router.push('/edit-profile')}>
               <Feather name="edit-3" size={18} color="rgba(255,255,255,0.9)" />
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
           <View style={styles.balanceBox}>
             <View>
@@ -64,14 +70,21 @@ export default function ProfileScreen() {
               <Feather name="users" size={20} color={Colors.brand} />
             </View>
             <Text style={[styles.statValue, { color: Colors.brand }]}>3</Text>
-            <Text style={styles.statLabel}>Tontines</Text>
+            <Text style={styles.statLabel}>Tontines que vous avez créées</Text>
           </View>
           <View style={[styles.statCard, { borderTopColor: Colors.success }]}>
             <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
               <Feather name="target" size={20} color={Colors.success} />
             </View>
             <Text style={[styles.statValue, { color: Colors.success }]}>2</Text>
-            <Text style={styles.statLabel}>Objectifs</Text>
+            <Text style={styles.statLabel}>Vos objectifs d'épargne</Text>
+          </View>
+          <View style={[styles.statCard, { borderTopColor: Colors.success }]}>
+            <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
+              <Feather name="user-plus" size={20} color={Colors.success} />
+            </View>
+            <Text style={[styles.statValue, { color: Colors.success }]}>2</Text>
+            <Text style={styles.statLabel}>Tontines que vous avez rejointes</Text>
           </View>
           
         </View>
@@ -79,11 +92,9 @@ export default function ProfileScreen() {
         <Text style={styles.sectionEyebrow}>Paramètres</Text>
         <View style={styles.settingsBlock}>
           {settingsOptions.map((option) => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={option.id}
-              style={styles.settingsItem}
-              activeOpacity={0.85}
-              onPress={() => {
+              style={styles.settingsItem} onPress={() => {
                 if (option.id === 'notifications') router.push('/notifications');
                 else if (option.id === 'security') router.push('/security');
                 else if (option.id === 'help') router.push('/help-support');
@@ -100,14 +111,14 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/')} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.logoutButton} onPress={() => router.replace('/')} >
           <Feather name="log-out" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <Text style={styles.version}>COTICI v1.0.2</Text>
         <View style={{ height: 40 }} />

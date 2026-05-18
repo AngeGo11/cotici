@@ -1,5 +1,12 @@
 import { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Image,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -82,9 +89,9 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <View style={styles.headerLogo}>
           <Image source={require('../../../../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.logoStyle}>COTICI</Text>
@@ -132,31 +139,31 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={[styles.loginButton, isSubmitting && styles.loginButtonDisabled]} onPress={handleLogin} disabled={isSubmitting}>
+        <AnimatedPressable style={[styles.loginButton, isSubmitting && styles.loginButtonDisabled]} onPress={handleLogin} disabled={isSubmitting}>
           <Text style={styles.loginButtonText}>{isSubmitting ? 'Connexion...' : 'Connexion'}</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
-        <TouchableOpacity>
+        <AnimatedPressable>
           <Text style={styles.forgotPin}>Code PIN oublié ?</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        <TouchableOpacity onPress={() => router.push('/create-account')} style={styles.createAccountWrap}>
+        <AnimatedPressable onPress={() => router.push('/create-account')} style={styles.createAccountWrap}>
           <Text style={styles.createAccountText}>
             Pas encore de compte ? <Text style={styles.createAccountBold}>Créer un compte</Text>
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+        <AnimatedPressable onPress={() => router.push('/(tabs)')}>
           <Text style={styles.demoLink}>Passer directement au dashboard →</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       <View style={styles.biometric}>
         <Text style={styles.biometricLabel}>Ou connectez-vous avec</Text>
-        <TouchableOpacity style={styles.biometricButton}>
+        <AnimatedPressable style={styles.biometricButton}>
           <Feather name="smartphone" size={32} color={Colors.brand} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </SafeAreaView>
   );

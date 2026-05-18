@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -29,9 +38,9 @@ export default function EditProfileScreen() {
         keyboardVerticalOffset={8}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           <Text style={styles.headerTitle}>Modifier le profil</Text>
           <View style={styles.backButton} />
         </View>
@@ -58,9 +67,9 @@ export default function EditProfileScreen() {
             />
           </View>
           <Text style={styles.hint}>Les changements seront enregistrés sur cet appareil (démo).</Text>
-          <TouchableOpacity style={styles.saveButton} onPress={save} activeOpacity={0.9}>
+          <AnimatedPressable style={styles.saveButton} onPress={save} >
             <Text style={styles.saveText}>Enregistrer</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>

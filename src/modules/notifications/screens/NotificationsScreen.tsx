@@ -1,5 +1,11 @@
 import { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -78,17 +84,17 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.readAllButton, unreadCount === 0 && styles.readAllButtonDisabled]}
           onPress={markAllAsRead}
           disabled={unreadCount === 0}
         >
           <Text style={styles.readAllText}>Tout lire</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       <Text style={styles.subtitle}>
@@ -99,14 +105,12 @@ export default function NotificationsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {items.map((notification) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={notification.id}
             style={[
               styles.item,
               !notification.estLue && styles.itemUnread,
-            ]}
-            activeOpacity={0.8}
-            onPress={() => {
+            ]} onPress={() => {
               if (notification.category === 'invitation') {
                 router.push('/invitations');
               }
@@ -130,7 +134,7 @@ export default function NotificationsScreen() {
               <Text style={styles.itemDate}>{notification.date}</Text>
             </View>
             {!notification.estLue ? <View style={styles.unreadDot} /> : null}
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
         <View style={{ height: 24 }} />
       </ScrollView>

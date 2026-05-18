@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,7 +18,7 @@ const solidarityReasons = ['Maladie', 'Décès', 'Mariage', 'Naissance', 'Étude
 
 export default function CreateSolidarityTontineScreen() {
   const router = useRouter();
-  const [beneficiaryName, setBeneficiaryName] = useState('');
+  const [beneficiaryPhone, setBeneficiaryPhone] = useState('');
   const [reason, setReason] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [contributionAmount, setContributionAmount] = useState('');
@@ -23,9 +30,9 @@ export default function CreateSolidarityTontineScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -39,19 +46,42 @@ export default function CreateSolidarityTontineScreen() {
         </View>
 
         <Text style={styles.sectionEyebrow}>Bénéficiaire</Text>
+
         <View style={styles.beneficiaryCard}>
-          <View style={styles.beneficiaryAvatar}>
-            <Feather name="user-plus" size={32} color={Colors.white} />
+          <View style={styles.beneficiaryHeader}>
+            <View style={styles.beneficiaryAvatar}>
+              <Feather name="user-plus" size={28} color={Colors.white} />
+            </View>
+            <View style={styles.beneficiaryHeaderText}>
+              <Text style={styles.beneficiaryLabel}>Qui aidez-vous ?</Text>
+              <Text style={styles.beneficiarySublabel}>
+                Saisissez le numéro Cotici de la personne à soutenir
+              </Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.beneficiaryLabel}>Qui aidez-vous ?</Text>
-            <TextInput
-              style={styles.beneficiaryInput}
-              value={beneficiaryName}
-              onChangeText={setBeneficiaryName}
-              placeholder="Nom ou numéro de téléphone"
-              placeholderTextColor={Colors.gray[400]}
-            />
+
+          <TextInput
+            style={styles.beneficiaryInput}
+            value={beneficiaryPhone}
+            onChangeText={setBeneficiaryPhone}
+            placeholder="+225 07 00 00 00 00"
+            placeholderTextColor={Colors.gray[400]}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
+
+          <View style={styles.beneficiaryHint}>
+            <Feather name="info" size={14} color={Colors.brand} />
+            <Text style={[styles.beneficiaryHintText, { textAlign: 'justify' }]}>
+              L'argent récolté sera versé directement sur le solde Cotici du bénéficiaire lorsque l'objectif de la collecte est atteinte et que le gestionnaire de la tontine aura validé le paiement.
+            </Text>
+          </View>
+
+          <View style={styles.beneficiaryHint}>
+            <Feather name="shield" size={14} color={Colors.brand} />
+            <Text style={[styles.beneficiaryHintText, { textAlign: 'justify' }]}>
+              À des fins de sécurité, le numéro de téléphone du bénéficiaire ne sera jamais communiqué aux participants.
+            </Text>
           </View>
         </View>
 
@@ -72,14 +102,12 @@ export default function CreateSolidarityTontineScreen() {
           {solidarityReasons.map((r) => {
             const active = reason === r;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={r}
                 style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setReason(r)}
-                activeOpacity={0.85}
-              >
+                onPress={() => setReason(r)} >
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{r}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -129,14 +157,12 @@ export default function CreateSolidarityTontineScreen() {
           </View>
         )}
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-solidarity' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'create-solidarity' } })} >
           <Feather name="heart" size={20} color={Colors.white} />
           <Text style={styles.createButtonText}>Créer le groupe de soutien</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.footerNote}>Vous pourrez inviter les participants après la création.</Text>
 
         <View style={{ height: 40 }} />
@@ -196,42 +222,69 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   beneficiaryCard: {
-    flexDirection: 'row',
-    gap: Theme.spacing.lg,
     marginHorizontal: Theme.spacing.page,
     backgroundColor: withOpacity(Colors.brand, 0.06),
     borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.xl,
+    padding: Theme.spacing.lg,
     marginBottom: Theme.spacing.xl,
     borderWidth: 1,
     borderColor: withOpacity(Colors.brand, 0.2),
+    gap: Theme.spacing.md,
     ...Theme.shadow.soft,
   },
+  beneficiaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.md,
+  },
   beneficiaryAvatar: {
-    width: 72,
-    height: 72,
+    width: 56,
+    height: 56,
     borderRadius: Theme.radius.md,
     backgroundColor: Colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Theme.shadow.soft,
+    flexShrink: 0,
+  },
+  beneficiaryHeaderText: {
+    flex: 1,
+    minWidth: 0,
   },
   beneficiaryLabel: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 14,
-    color: Colors.gray[700],
-    marginBottom: 8,
+    fontFamily: Fonts.outfit.semiBold,
+    fontSize: 16,
+    color: Colors.gray[900],
+    marginBottom: 4,
+  },
+  beneficiarySublabel: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[600],
+    lineHeight: 18,
   },
   beneficiaryInput: {
     backgroundColor: Theme.screen.surface,
     borderRadius: Theme.radius.md,
     paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md + 2,
     fontFamily: Fonts.outfit.regular,
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.gray[900],
     borderWidth: 1,
     borderColor: Colors.gray[100],
+  },
+  beneficiaryHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingTop: 2,
+  },
+  beneficiaryHintText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    color: Colors.gray[600],
+    lineHeight: 17,
   },
   fieldBlock: { marginBottom: Theme.spacing.lg },
   label: {

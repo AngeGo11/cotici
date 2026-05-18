@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -26,17 +32,15 @@ export default function SavingsDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.historyPill}
-            activeOpacity={0.85}
-            onPress={() => router.push('/savings-history')}
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.historyPill} onPress={() => router.push('/savings-history')}
           >
             <Feather name="clock" size={16} color={Colors.brand} />
             <Text style={styles.historyLink}>Historique</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -114,22 +118,18 @@ export default function SavingsDetailScreen() {
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
+          <AnimatedPressable
             style={styles.addButton}
-            onPress={() => router.push('/add-to-savings')}
-            activeOpacity={0.9}
-          >
+            onPress={() => router.push('/add-to-savings')} >
             <Feather name="plus-circle" size={20} color={Colors.white} />
             <Text style={styles.addButtonText}>Ajouter de l&apos;argent</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.editButton}
-            onPress={() => router.push('/modifier-objectif')}
-            activeOpacity={0.85}
-          >
+            onPress={() => router.push('/modifier-objectif')} >
             <Feather name="edit-2" size={18} color={Colors.gray[700]} />
             <Text style={styles.editButtonText}>Modifier l&apos;objectif</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <Text style={styles.sectionEyebrow}>Contributions récentes</Text>

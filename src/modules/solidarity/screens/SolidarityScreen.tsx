@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -16,12 +22,12 @@ export default function SolidarityScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/solidarity-rules')} activeOpacity={0.7}>
+          </AnimatedPressable>
+          <AnimatedPressable onPress={() => router.push('/solidarity-rules')} >
             <Text style={styles.ruleLink}>Règlement</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.titleRow}>
@@ -52,16 +58,16 @@ export default function SolidarityScreen() {
           <Text style={styles.infoText}>Le fonds d'urgence est réservé aux situations critiques validées par le groupe.</Text>
         </View>
 
-        <TouchableOpacity style={styles.emergencyButton} onPress={() => router.push({ pathname: '/success', params: { type: 'aid-request' } })}>
+        <AnimatedPressable style={styles.emergencyButton} onPress={() => router.push({ pathname: '/success', params: { type: 'aid-request' } })}>
           <Feather name="alert-circle" size={20} color={Colors.brand} />
           <Text style={styles.emergencyButtonText}>Demander une aide d'urgence</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Historique des Aides</Text>
-          <TouchableOpacity onPress={() => router.push('/solidarity-aid-history')} activeOpacity={0.7}>
+          <AnimatedPressable onPress={() => router.push('/solidarity-aid-history')} >
             <Text style={styles.seeAll}>Voir tout</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         {aidPreview.map((aid) => {

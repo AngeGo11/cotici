@@ -1,14 +1,27 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 
 const savingsOptions = [
   { id: 'tontine', icon: 'refresh-cw' as const, color: Colors.brand, title: 'Tontine de Groupe', subtitle: 'Cotisez ensemble, ramassez à tour de rôle.', path: '/create-classic-tontine' as const },
-  { id: 'epargne', icon: 'dollar-sign' as const, color: Colors.success, title: 'Mon Épargne', subtitle: 'Économisez seul pour vos envies.', path: '/create-personal-goal' as const },
+  {
+    id: 'epargne',
+    materialIcon: 'piggy-bank-outline' as const,
+    color: Colors.success,
+    title: 'Mon Épargne',
+    subtitle: 'Économisez seul pour vos envies.',
+    path: '/create-personal-goal' as const,
+  },
   { id: 'solidaire', icon: 'heart' as const, color: Colors.brand, title: 'Tontine Solidaire', subtitle: 'Cotisez pour aider une personne dans le besoin.', path: '/create-solidarity-tontine' as const },
   { id: 'asso', icon: 'home' as const, color: Colors.success, title: 'Cagnotte Association', subtitle: 'Récoltez des fonds pour une cause commune.', path: '/create-association-fund' as const },
 ];
@@ -20,9 +33,9 @@ export default function CreateSavingsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -35,44 +48,29 @@ export default function CreateSavingsScreen() {
           </Text>
         </View>
 
-        <View style={styles.introCard}>
-          <Feather name="zap" size={20} color={Colors.brand} />
-          <Text style={styles.introText}>
-            Chaque option a ses avantages : groupe pour la force du collectif, épargne perso pour la liberté.
-          </Text>
-        </View>
-
         <Text style={styles.sectionEyebrow}>Types de projet</Text>
 
         {savingsOptions.map((opt) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={opt.id}
             style={styles.optionCard}
-            onPress={() => router.push(opt.path)}
-            activeOpacity={0.88}
-          >
+            onPress={() => router.push(opt.path)} >
             <View style={[styles.optionIcon, { backgroundColor: withOpacity(opt.color, 0.12) }]}>
-              <Feather name={opt.icon} size={28} color={opt.color} />
+              {'materialIcon' in opt ? (
+                <MaterialCommunityIcons name={opt.materialIcon} size={28} color={opt.color} />
+              ) : (
+                <Feather name={opt.icon} size={28} color={opt.color} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.optionTitle}>{opt.title}</Text>
               <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
             </View>
             <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
 
-        <View style={styles.tipCard}>
-          <View style={styles.tipIconCircle}>
-            <Feather name="info" size={18} color={Colors.info} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.tipTitle}>Conseil</Text>
-            <Text style={styles.tipText}>
-              {"Les tontines de groupe mobilisent vite une grosse somme ; l'épargne personnelle reste la plus flexible au quotidien."}
-            </Text>
-          </View>
-        </View>
+        
 
         
       </ScrollView>

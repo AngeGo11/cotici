@@ -97,24 +97,34 @@ class TontineRegle(models.Model):
         MENSUEL = "MENSUEL", _("Mensuel")
         PERSONNALISE = "PERSONNALISÉE", _("Personnalisée")
 
-
+    class ORDRE_RAMASSAGE(models.TextChoices):
+        DEFINI_PAR_ADMIN = "DÉFINI PAR L'ADMIN", _("Défini par l'admin")
+        ALEATOIRE = "ALÉATOIRE", _("Aléatoire")
 
     tontine = models.OneToOneField(Tontine, on_delete=models.CASCADE)
     objectif_cotisation = models.DecimalField(max_digits=10, decimal_places=0)
     montant_penalite = models.DecimalField(max_digits=10, decimal_places=0)
     nombre_max = models.IntegerField()
-    ordre_aleatoire = models.BooleanField(default=False)
+    ordre_ramassage = models.CharField(choices= ORDRE_RAMASSAGE.choices,default=ORDRE_RAMASSAGE.ALEATOIRE, max_length=25)
     frequence = models.CharField(choices= FREQUENCE_COTISATION.choices, max_length=25)
     frequence_personalise = models.IntegerField(blank=True, null=True)
+    nombre_tours = models.IntegerField()
 
 
 
 class TourTontine(models.Model):
+    class STATUT_TOUR(models.TextChoices):
+        EN_COURS="EN COURS", _("En cours")
+        TERMINE="TERMINÉ", _("Terminé")
+        REPORTE="REPORTÉ", _("Reporté")
+
+
     tontine = models.ForeignKey(Tontine, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     montant_depose = models.DecimalField(max_digits=10, decimal_places=0)
     date = models.DateTimeField(auto_now_add=True)
     numero_du_tour = models.IntegerField()
+    statut_tour = models.CharField(choices= STATUT_TOUR.choices, default=STATUT_TOUR.EN_COURS, max_length=25)
 
     class Meta:
         constraints = [

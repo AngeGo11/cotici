@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -97,15 +98,15 @@ export default function SuccessScreen() {
       </View>
 
       <View style={styles.bottom}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.primaryButton, { backgroundColor: config.color }]}
           onPress={() => router.replace(config.buttonRoute as any)}
         >
           <Text style={styles.primaryButtonText}>{config.buttonLabel}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => router.replace('/(tabs)')}>
+        </AnimatedPressable>
+        <AnimatedPressable style={styles.secondaryButton} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.secondaryButtonText}>Retour à l'accueil</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </SafeAreaView>
   );

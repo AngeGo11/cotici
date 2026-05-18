@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -25,9 +31,9 @@ export default function ProchainesEcheancesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Prochaines échéances</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -44,11 +50,28 @@ export default function ProchainesEcheancesScreen() {
           </View>
         ) : (
           list.map((item) => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={item.id}
               style={styles.row}
-              onPress={() => router.push('/make-deposit')}
-              activeOpacity={0.75}
+              onPress={() => {
+                if (item.kind === 'tontine' && item.tontineId && item.tontineName) {
+                  router.push({
+                    pathname: '/make-deposit',
+                    params: {
+                      tontineId: item.tontineId,
+                      tontineName: item.tontineName,
+                      turn: item.turn ?? '1',
+                      amount: String(item.amountF),
+                    },
+                  });
+                  return;
+                }
+                if (item.kind === 'tontine') {
+                  router.push('/choose-tontine-cotisation');
+                  return;
+                }
+                router.push('/deposit-to-account');
+              }}
             >
               <View style={styles.iconWrap}>
                 <Feather name={kindIcon(item.kind)} size={22} color={Colors.brand} />
@@ -60,7 +83,7 @@ export default function ProchainesEcheancesScreen() {
                 </Text>
               </View>
               <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))
         )}
         <View style={{ height: 40 }} />

@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +12,9 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import type { JoinRequest, PaymentValidation } from '@/types';
+import { useLocalSearchParams } from 'expo-router';
+import { needsDefineOrdre, ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
+import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
 
 const joinRequests: JoinRequest[] = [
   { id: '1', name: 'Sophie Traoré', avatar: 'ST', phone: '+225 07 12 34 56', requestDate: '10 Fév 2026' },
@@ -24,14 +33,23 @@ const penalties = [
 
 export default function AdminScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tontineId?: string; tontineNom?: string }>();
+  const tontineId = typeof params.tontineId === 'string' ? params.tontineId : '2';
+  const tontineNom =
+    typeof params.tontineNom === 'string' && params.tontineNom.trim()
+      ? params.tontineNom.trim()
+      : 'Tontine Entrepreneurs';
+  const phaseState = useTontinePhase(tontineId);
+  const showDefineOrdreCta = phaseState ? needsDefineOrdre(phaseState) : false;
+  const ordreVerrouille = phaseState?.ordrePublie ?? false;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
           <View style={styles.adminBadge}><Text style={styles.adminBadgeText}>Mode Administrateur</Text></View>
         </View>
 
@@ -39,7 +57,7 @@ export default function AdminScreen() {
           <View style={styles.titleIcon}><Feather name="shield" size={24} color={Colors.brand} /></View>
           <View>
             <Text style={styles.title}>Gestion du Groupe</Text>
-            <Text style={styles.subtitle}>Tontine Entrepreneurs</Text>
+            <Text style={styles.subtitle}>{tontineNom}</Text>
           </View>
         </View>
 
@@ -60,8 +78,8 @@ export default function AdminScreen() {
               <Text style={styles.requestDate}>{req.requestDate}</Text>
             </View>
             <View style={styles.requestActions}>
-              <TouchableOpacity style={styles.acceptButton}><Feather name="check" size={16} color={Colors.white} /><Text style={styles.acceptText}>Accepter</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.rejectButton}><Feather name="x" size={16} color={Colors.white} /><Text style={styles.rejectText}>Refuser</Text></TouchableOpacity>
+              <AnimatedPressable style={styles.acceptButton}><Feather name="check" size={16} color={Colors.white} /><Text style={styles.acceptText}>Accepter</Text></AnimatedPressable>
+              <AnimatedPressable style={styles.rejectButton}><Feather name="x" size={16} color={Colors.white} /><Text style={styles.rejectText}>Refuser</Text></AnimatedPressable>
             </View>
           </View>
         ))}
@@ -76,7 +94,7 @@ export default function AdminScreen() {
               <View><Text style={styles.paymentName}>{pay.memberName}</Text><View style={styles.paymentInfo}><Text style={styles.paymentAmount}>{pay.amount.toLocaleString('fr-FR')} F</Text><View style={styles.dot} /><Text style={styles.paymentMethod}>{pay.method}</Text></View></View>
               <Text style={styles.paymentDate}>{pay.date}</Text>
             </View>
-            <TouchableOpacity style={styles.confirmButton}><Text style={styles.confirmText}>Confirmer la réception</Text></TouchableOpacity>
+            <AnimatedPressable style={styles.confirmButton}><Text style={styles.confirmText}>Confirmer la réception</Text></AnimatedPressable>
           </View>
         ))}
 
@@ -107,11 +125,32 @@ export default function AdminScreen() {
           </View>
         ))}
 
+        {showDefineOrdreCta ? (
+          <View style={styles.ordreHintCard}>
+            <Feather name="info" size={18} color={Colors.brand} />
+            <Text style={styles.ordreHintText}>
+              L&apos;ordre de ramassage se définit depuis la page de la tontine, une fois le groupe
+              complet. Il ne sera pas modifiable dans les paramètres après publication.
+            </Text>
+          </View>
+        ) : null}
+
+        {ordreVerrouille ? (
+          <View style={styles.ordreLockCard}>
+            <Feather name="lock" size={18} color={Colors.gray[600]} />
+            <Text style={styles.ordreLockText}>{ORDRE_LOCK_MESSAGE}</Text>
+          </View>
+        ) : null}
+
         <Text style={[styles.sectionTitle, { paddingHorizontal: Theme.spacing.page, marginTop: 24, marginBottom: 16 }]}>Paramètres du Groupe</Text>
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.settingsItem}
-          onPress={() => router.push({ pathname: '/modifier-regles', params: { tontineNom: 'Tontine Entrepreneurs' } })}
-          activeOpacity={0.85}
+          onPress={() =>
+            router.push({
+              pathname: '/modifier-regles',
+              params: { tontineId, tontineNom, ordrePublie: ordreVerrouille ? '1' : '0' },
+            })
+          }
         >
           <View style={styles.settingsLeft}>
             <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.info, 0.1) }]}>
@@ -123,11 +162,10 @@ export default function AdminScreen() {
             </View>
           </View>
           <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-        </TouchableOpacity>
-        <TouchableOpacity
+        </AnimatedPressable>
+        <AnimatedPressable
           style={styles.settingsItem}
-          onPress={() => router.push({ pathname: '/exclure-membre', params: { tontineNom: 'Tontine Entrepreneurs' } })}
-          activeOpacity={0.85}
+          onPress={() => router.push({ pathname: '/exclure-membre', params: { tontineNom } })}
         >
           <View style={styles.settingsLeft}>
             <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.danger, 0.08) }]}>
@@ -139,7 +177,7 @@ export default function AdminScreen() {
             </View>
           </View>
           <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <View style={styles.infoBanner}>
           <Feather name="alert-circle" size={20} color={Colors.info} />
@@ -199,6 +237,32 @@ const styles = StyleSheet.create({
   settingsIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   settingsLabel: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[900] },
   settingsDesc: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  ordreHintCard: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginTop: 8,
+    backgroundColor: withOpacity(Colors.brand, 0.08),
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.15),
+    alignItems: 'flex-start',
+  },
+  ordreHintText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[700], lineHeight: 20 },
+  ordreLockCard: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginTop: 8,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    alignItems: 'flex-start',
+  },
+  ordreLockText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[600], lineHeight: 19 },
   infoBanner: { flexDirection: 'row', gap: 12, marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.info, 0.08), borderRadius: 16, padding: 16, marginTop: 24, borderWidth: 1, borderColor: withOpacity(Colors.info, 0.15), alignItems: 'flex-start' },
   infoText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.info },
 });

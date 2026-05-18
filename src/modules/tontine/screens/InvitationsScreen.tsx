@@ -1,5 +1,11 @@
 import { useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -39,9 +45,9 @@ export default function InvitationsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Invitations</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -51,14 +57,12 @@ export default function InvitationsScreen() {
       </Text>
 
       <View style={styles.ctaRow}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.newButton}
-          onPress={() => router.push('/new-invitation')}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push('/new-invitation')} >
           <Feather name="user-plus" size={20} color={Colors.white} />
           <Text style={styles.newButtonText}>Nouvelle invitation</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -98,20 +102,20 @@ export default function InvitationsScreen() {
 
             {invitation.statut === 'EN_ATTENTE' ? (
               <View style={styles.actionsRow}>
-                <TouchableOpacity
+                <AnimatedPressable
                   style={styles.acceptButton}
                   onPress={() => updateStatus(invitation.id, 'ACCEPTE')}
                 >
                   <Feather name="check" size={16} color={Colors.white} />
                   <Text style={styles.acceptText}>Accepter</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                   style={styles.rejectButton}
                   onPress={() => updateStatus(invitation.id, 'REFUSE')}
                 >
                   <Feather name="x" size={16} color={Colors.white} />
                   <Text style={styles.rejectText}>Refuser</Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
             ) : null}
           </View>

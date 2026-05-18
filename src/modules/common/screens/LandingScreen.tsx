@@ -1,4 +1,10 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { 
+  View,
+  Text,
+  StyleSheet,
+  Image,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -45,26 +51,26 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.bottom}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.primaryButton}
           onPress={() => router.push('/create-account')}
         >
           <Text style={styles.primaryButtonText}>Créer un compte</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </AnimatedPressable>
+        <AnimatedPressable
           style={styles.secondaryButton}
           onPress={() => router.push('/login')}
         >
           <Text style={styles.secondaryButtonText}>Se connecter</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/terms')} activeOpacity={0.7}>
+        </AnimatedPressable>
+        <AnimatedPressable disableScale onPress={() => router.push('/terms')}>
           <Text style={styles.terms}>
             En continuant, vous acceptez nos conditions d&apos;utilisation
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+        </AnimatedPressable>
+        <AnimatedPressable disableScale onPress={() => router.push('/(tabs)')}>
           <Text style={styles.demoLink}>Accès rapide dashboard →</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </SafeAreaView>
   );

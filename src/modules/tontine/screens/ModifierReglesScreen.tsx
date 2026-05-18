@@ -1,21 +1,31 @@
 import { useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Switch } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+  Switch,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
 
 const DEFAULT_NOM = 'Tontine Entrepreneurs';
 
 export default function ModifierReglesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ tontineNom?: string }>();
+  const params = useLocalSearchParams<{ tontineNom?: string; ordrePublie?: string }>();
   const tontineNom = useMemo(
     () => (typeof params.tontineNom === 'string' && params.tontineNom ? params.tontineNom : DEFAULT_NOM),
     [params.tontineNom],
   );
+  const ordrePublie = params.ordrePublie === '1';
 
   const [monthlyAmount, setMonthlyAmount] = useState('120000');
   const [frequency, setFrequency] = useState<'weekly' | 'monthly' | 'biweekly'>('monthly');
@@ -34,9 +44,9 @@ export default function ModifierReglesScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -49,6 +59,16 @@ export default function ModifierReglesScreen() {
             Les changements s’appliqueront au prochain cycle, sauf mention contraire auprès des membres.
           </Text>
         </View>
+
+        {ordrePublie ? (
+          <View style={styles.ordreLockBanner}>
+            <Feather name="lock" size={18} color={Colors.gray[600]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ordreLockTitle}>Ordre de ramassage verrouillé</Text>
+              <Text style={styles.ordreLockDesc}>{ORDRE_LOCK_MESSAGE}</Text>
+            </View>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionEyebrow}>Cotisation & calendrier</Text>
 
@@ -77,14 +97,12 @@ export default function ModifierReglesScreen() {
                 { key: 'monthly' as const, label: 'Mensuel' },
               ] as const
             ).map(({ key, label }) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={key}
                 style={[styles.togglePill, frequency === key && styles.togglePillActive]}
-                onPress={() => setFrequency(key)}
-                activeOpacity={0.88}
-              >
+                onPress={() => setFrequency(key)} >
                 <Text style={[styles.togglePillText, frequency === key && styles.togglePillTextActive]}>{label}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             ))}
           </View>
         </View>
@@ -188,10 +206,10 @@ export default function ModifierReglesScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={save} activeOpacity={0.9}>
+        <AnimatedPressable style={styles.saveButton} onPress={save} >
           <Feather name="check" size={20} color={Colors.white} />
           <Text style={styles.saveText}>Enregistrer les modifications</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -225,6 +243,30 @@ const styles = StyleSheet.create({
   heroTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.gray[900], marginBottom: 4, textAlign: 'center' },
   heroSubtitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.brand, marginBottom: 8, textAlign: 'center' },
   heroHint: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[600], textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
+  ordreLockBanner: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    backgroundColor: Colors.gray[50],
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    alignItems: 'flex-start',
+  },
+  ordreLockTitle: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 14,
+    color: Colors.gray[900],
+    marginBottom: 4,
+  },
+  ordreLockDesc: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[600],
+    lineHeight: 19,
+  },
   sectionEyebrow: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,

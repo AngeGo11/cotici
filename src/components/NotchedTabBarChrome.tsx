@@ -1,10 +1,11 @@
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
+import { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import { AnimatedPressable } from '@/shared/ui';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { NavBrand } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
@@ -95,9 +96,10 @@ export function NotchedTabBarChrome({
       >
         <View style={styles.side}>
           {[0, 1].map((i) => (
-            <Pressable
+            <AnimatedPressable
               key={i}
               style={styles.tab}
+              scaleTo={0.92}
               onPress={() => onTabPress?.(i)}
             >
               <TabSlot
@@ -105,15 +107,16 @@ export function NotchedTabBarChrome({
                 active={activeTabIndex === i}
                 label={labels[i] ?? ''}
               />
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </View>
         <View style={styles.fabGap} />
         <View style={styles.side}>
           {[2, 3].map((i) => (
-            <Pressable
+            <AnimatedPressable
               key={i}
               style={styles.tab}
+              scaleTo={0.92}
               onPress={() => onTabPress?.(i)}
             >
               <TabSlot
@@ -121,12 +124,13 @@ export function NotchedTabBarChrome({
                 active={activeTabIndex === i}
                 label={labels[i] ?? ''}
               />
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </View>
       </View>
 
-      <TouchableOpacity
+      <AnimatedPressable
+        scaleTo={0.9}
         style={[
           styles.fab,
           {
@@ -135,13 +139,11 @@ export function NotchedTabBarChrome({
             backgroundColor: FAB_COLOR
           },
         ]}
-        onPress={onFabPress}
-        activeOpacity={0.92}
-        accessibilityRole="button"
+        onPress={onFabPress} accessibilityRole="button"
         accessibilityLabel="Action principale"
       >
         <Feather name="zap" size={FAB_ICON} color={NavBrand.pureWhite} />
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 }
@@ -156,6 +158,19 @@ function TabSlot({
   label: string;
 }) {
   const color = active ? NavBrand.emeraldGreen : NavBrand.neutralGrey;
+  const lineProgress = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    lineProgress.value = withSpring(active ? 1 : 0, {
+      damping: 16,
+      stiffness: 280,
+    });
+  }, [active, lineProgress]);
+
+  const activeLineStyle = useAnimatedStyle(() => ({
+    opacity: lineProgress.value,
+    transform: [{ scaleX: lineProgress.value }],
+  }));
 
   return (
     <View style={styles.tabInner}>
@@ -172,10 +187,11 @@ function TabSlot({
       >
         {label}
       </Text>
-      <View
+      <Animated.View
         style={[
           styles.activeLine,
-          { backgroundColor: active ? NavBrand.emeraldGreen : 'transparent' },
+          { backgroundColor: NavBrand.emeraldGreen },
+          activeLineStyle,
         ]}
       />
     </View>

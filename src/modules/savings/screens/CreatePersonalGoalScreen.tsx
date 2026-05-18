@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
@@ -15,6 +22,7 @@ export default function CreatePersonalGoalScreen() {
   const [targetAmount, setTargetAmount] = useState('');
   const [duration, setDuration] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [otherCategory, setOtherCategory] = useState('');
 
   const monthlyAmount = targetAmount && duration ? Math.ceil(Number(targetAmount) / Number(duration)) : 0;
 
@@ -22,14 +30,14 @@ export default function CreatePersonalGoalScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
           <View style={styles.heroIconWrap}>
-            <Feather name="dollar-sign" size={28} color={Colors.success} />
+            <MaterialCommunityIcons name="piggy-bank-outline" size={28} color={Colors.success} />
           </View>
           <Text style={styles.heroTitle}>Mon épargne</Text>
           <Text style={styles.heroSubtitle}>
@@ -37,7 +45,6 @@ export default function CreatePersonalGoalScreen() {
           </Text>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Votre objectif</Text>
 
         <View style={styles.fieldBlock}>
           <Text style={styles.label}>Nom de l&apos;objectif</Text>
@@ -82,17 +89,33 @@ export default function CreatePersonalGoalScreen() {
           {categories.map((c) => {
             const selected = category === c;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={c}
                 style={[styles.categoryChip, selected && styles.categoryChipActive]}
-                onPress={() => setCategory(c)}
-                activeOpacity={0.85}
+                onPress={() => {
+                  setCategory(c);
+                  if (c !== 'Autre') setOtherCategory('');
+                }}
               >
                 <Text style={[styles.categoryText, selected && styles.categoryTextActive]}>{c}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
+
+        {category === 'Autre' && (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Précisez la catégorie</Text>
+            <TextInput
+              style={styles.input}
+              value={otherCategory}
+              onChangeText={setOtherCategory}
+              placeholder="Ex : Achat véhicule, rénovation…"
+              placeholderTextColor={Colors.gray[400]}
+              autoFocus
+            />
+          </View>
+        )}
 
         {monthlyAmount > 0 && (
           <View style={styles.previewCard}>
@@ -111,14 +134,12 @@ export default function CreatePersonalGoalScreen() {
           </View>
         )}
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-goal' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'create-goal' } })} >
           <Feather name="check-circle" size={20} color={Colors.white} />
           <Text style={styles.createButtonText}>Créer mon objectif</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.footerNote}>Vous pourrez suivre votre progression en temps réel dans l&apos;onglet Épargne.</Text>
 
         <View style={{ height: 40 }} />

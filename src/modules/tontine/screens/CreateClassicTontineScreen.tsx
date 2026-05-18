@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -22,9 +29,9 @@ export default function CreateClassicTontineScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -69,12 +76,10 @@ export default function CreateClassicTontineScreen() {
           <Text style={styles.label}>Fréquence des cotisations</Text>
           <View style={styles.toggleGrid}>
             {(['daily', 'weekly', 'monthly', 'custom'] as const).map((f) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={f}
                 style={[styles.toggleButton, frequency === f && styles.toggleActive]}
-                onPress={() => setFrequency(f)}
-                activeOpacity={0.88}
-              >
+                onPress={() => setFrequency(f)} >
                 <Text style={[styles.toggleText, frequency === f && styles.toggleTextActive]}>
                   {f === 'daily'
                     ? 'Journalière'
@@ -84,7 +89,7 @@ export default function CreateClassicTontineScreen() {
                         ? 'Mensuelle'
                         : 'Personnalisée'}
                 </Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             ))}
           </View>
         </View>
@@ -118,36 +123,15 @@ export default function CreateClassicTontineScreen() {
                 Activez ce mode pour sanctionner les retards ou absences de paiement.
               </Text>
             </View>
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.switchPill, penaltiesEnabled && styles.switchPillActive]}
-              onPress={() => setPenaltiesEnabled((v) => !v)}
-              activeOpacity={0.85}
-            >
+              onPress={() => setPenaltiesEnabled((v) => !v)} >
               <View style={[styles.switchKnob, penaltiesEnabled && styles.switchKnobActive]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
 
           {penaltiesEnabled ? (
             <>
-              <Text style={[styles.label, { paddingHorizontal: 0, marginTop: 14 }]}>Type de pénalité</Text>
-              <View style={[styles.toggleRow, { paddingHorizontal: 0 }]}>
-                {([
-                  { key: 'retard', label: 'Retard de paiement' },
-                  { key: 'absence', label: 'Absence de paiement' },
-                ] as const).map((opt) => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[styles.toggleButton, penaltyType === opt.key && styles.toggleActive]}
-                    onPress={() => setPenaltyType(opt.key)}
-                    activeOpacity={0.88}
-                  >
-                    <Text style={[styles.toggleText, penaltyType === opt.key && styles.toggleTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <Text style={[styles.label, { paddingHorizontal: 0, marginTop: 14 }]}>Montant de la pénalité</Text>
               <View style={styles.inputWithUnit}>
                 <TextInput
@@ -166,7 +150,7 @@ export default function CreateClassicTontineScreen() {
           )}
         </View>
 
-        <Text style={styles.sectionEyebrow}>Ordre de passage</Text>
+        <Text style={styles.sectionEyebrow}>Ordre de ramassage</Text>
         <Text style={styles.sectionHint}>Choisissez comment le bénéficiaire est désigné à chaque cycle.</Text>
 
         {(
@@ -181,16 +165,14 @@ export default function CreateClassicTontineScreen() {
               key: 'admin' as const,
               icon: 'clipboard' as const,
               title: "Défini par l'admin",
-              desc: "Vous décidez qui reçoit et à quelle date.",
+              desc: "Une fois tous les membres inscrits, vous définirez l'ordre avant le 1er tour.",
             },
           ] as const
         ).map((opt) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={opt.key}
             style={[styles.radioCard, rotationLogic === opt.key && styles.radioCardActive]}
-            onPress={() => setRotationLogic(opt.key)}
-            activeOpacity={0.88}
-          >
+            onPress={() => setRotationLogic(opt.key)} >
             <View style={[styles.radio, rotationLogic === opt.key && styles.radioActive]}>
               {rotationLogic === opt.key ? <View style={styles.radioInner} /> : null}
             </View>
@@ -201,7 +183,7 @@ export default function CreateClassicTontineScreen() {
               <Text style={styles.radioTitle}>{opt.title}</Text>
               <Text style={styles.radioDesc}>{opt.desc}</Text>
             </View>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
 
         <View style={styles.infoBanner}>
@@ -216,14 +198,12 @@ export default function CreateClassicTontineScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-tontine' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'create-tontine' } })} >
           <Feather name="user-plus" size={20} color={Colors.white} />
           <Text style={styles.createButtonText}>Créer et inviter</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         <View style={{ height: 40 }} />
       </ScrollView>

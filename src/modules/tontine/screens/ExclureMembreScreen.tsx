@@ -1,5 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, TextInput } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  TextInput,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -61,9 +69,9 @@ export default function ExclureMembreScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <View style={styles.topBarText}>
           <Text style={styles.headerTitle}>Exclure un membre</Text>
           <Text style={styles.headerSub} numberOfLines={1}>
@@ -82,21 +90,19 @@ export default function ExclureMembreScreen() {
           <View style={styles.emptyBox}>
             <Feather name="users" size={40} color={Colors.gray[400]} />
             <Text style={styles.emptyTitle}>Aucun membre à afficher</Text>
-            <TouchableOpacity onPress={() => router.back()}>
+            <AnimatedPressable onPress={() => router.back()}>
               <Text style={styles.emptyLink}>Retour</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         ) : (
           <>
             {members.map((m) => {
               const active = selectedId === m.id;
               return (
-                <TouchableOpacity
+                <AnimatedPressable
                   key={m.id}
                   style={[styles.card, active && styles.cardActive]}
-                  onPress={() => setSelectedId(m.id)}
-                  activeOpacity={0.88}
-                >
+                  onPress={() => setSelectedId(m.id)} >
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{m.avatar}</Text>
                   </View>
@@ -108,7 +114,7 @@ export default function ExclureMembreScreen() {
                   <View style={[styles.radio, active && styles.radioOn]}>
                     {active ? <View style={styles.radioInner} /> : null}
                   </View>
-                </TouchableOpacity>
+                </AnimatedPressable>
               );
             })}
 
@@ -126,15 +132,13 @@ export default function ExclureMembreScreen() {
               />
             </View>
 
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.dangerButton, !selected && styles.dangerButtonDisabled]}
               onPress={requestExclude}
-              disabled={!selected}
-              activeOpacity={0.9}
-            >
+              disabled={!selected} >
               <Feather name="user-minus" size={20} color={Colors.white} />
               <Text style={styles.dangerText}>Exclure du groupe</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </>
         )}
 

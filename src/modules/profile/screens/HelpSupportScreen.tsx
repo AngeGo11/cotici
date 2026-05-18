@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Linking, Pressable } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Linking,
+  Pressable,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,9 +32,9 @@ export default function HelpSupportScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Aide & support</Text>
         <View style={styles.backButton} />
       </View>
@@ -36,17 +44,15 @@ export default function HelpSupportScreen() {
           <Text style={styles.heroTitle}>Une question ?</Text>
           <Text style={styles.heroSub}>Nous répondons en général sous 24 h ouvrées.</Text>
           <View style={styles.actions}>
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.primaryBtn}
-              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
-              activeOpacity={0.9}
-            >
+              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} >
               <Feather name="mail" size={18} color={Colors.white} />
               <Text style={styles.primaryBtnText}>Écrire au support</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => Linking.openURL(WHATSAPP)} activeOpacity={0.9}>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.secondaryBtn} onPress={() => Linking.openURL(WHATSAPP)} >
               <Text style={styles.secondaryBtnText}>WhatsApp</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         </View>
 

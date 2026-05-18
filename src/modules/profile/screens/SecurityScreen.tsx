@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch } from 'react-native';
+import { 
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Switch,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -16,9 +23,9 @@ export default function SecurityScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.headerTitle}>Sécurité</Text>
         <View style={styles.backButton} />
       </View>
@@ -45,10 +52,10 @@ export default function SecurityScreen() {
               thumbColor={pinEnabled ? Colors.brand : Colors.gray[400]}
             />
           </View>
-          <TouchableOpacity style={styles.linkRow} activeOpacity={0.7}>
+          <AnimatedPressable style={styles.linkRow} >
             <Text style={styles.linkText}>Modifier le code PIN</Text>
             <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.card}>

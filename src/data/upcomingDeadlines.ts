@@ -8,6 +8,10 @@ export type UpcomingDeadline = {
   dueRelative: string;
   /** Sous-type pour l’icône / navigation future */
   kind: 'tontine' | 'epargne' | 'solidaire';
+  /** Référence tontine (cotisation) */
+  tontineId?: string;
+  tontineName?: string;
+  turn?: string;
 };
 
 /** Données de démo — à remplacer par l’API */
@@ -18,6 +22,9 @@ export const UPCOMING_DEADLINES: UpcomingDeadline[] = [
     amountF: 10000,
     dueRelative: 'dans 3 jours',
     kind: 'tontine',
+    tontineId: '1',
+    tontineName: 'Tontine Famille',
+    turn: '3',
   },
   {
     id: '2',
@@ -29,8 +36,11 @@ export const UPCOMING_DEADLINES: UpcomingDeadline[] = [
   {
     id: '3',
     title: 'Cotisation — Tontine Entrepreneurs',
-    amountF: 120000,
+    amountF: 10000,
     dueRelative: 'dans 8 jours',
     kind: 'tontine',
+    tontineId: '2',
+    tontineName: 'Tontine Entrepreneurs',
+    turn: '5',
   },
 ];

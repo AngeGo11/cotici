@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { 
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  StyleSheet,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -20,9 +27,9 @@ export default function CreateAssociationFundScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         <View style={styles.heroBlock}>
@@ -81,14 +88,12 @@ export default function CreateAssociationFundScreen() {
           {categories.map((c) => {
             const selected = category === c;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={c}
                 style={[styles.categoryChip, selected && styles.categoryChipActive]}
-                onPress={() => setCategory(c)}
-                activeOpacity={0.85}
-              >
+                onPress={() => setCategory(c)} >
                 <Text style={[styles.categoryText, selected && styles.categoryTextActive]}>{c}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -108,14 +113,12 @@ export default function CreateAssociationFundScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-fund' } })}
-          activeOpacity={0.9}
-        >
+          onPress={() => router.push({ pathname: '/success', params: { type: 'create-fund' } })} >
           <Feather name="plus-circle" size={20} color={Colors.white} />
           <Text style={styles.createButtonText}>Créer la cagnotte</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={styles.footerNote}>Vous pourrez partager le lien de collecte après la création.</Text>
 
         <View style={{ height: 40 }} />

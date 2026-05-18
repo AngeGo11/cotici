@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
-import {
+import { 
   View,
   Text,
   Modal,
   Pressable,
   StyleSheet,
   Animated,
-  TouchableOpacity,
-} from 'react-native';
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -31,7 +31,7 @@ const actions = [
     key: 'cotisation',
     label: 'Payer ma cotisation',
     icon: 'credit-card' as const,
-    href: '/make-deposit' as const,
+    href: '/choose-tontine-cotisation' as const,
   },
   {
     key: 'project',
@@ -106,18 +106,16 @@ export function QuickActionsSheet({ visible, onClose }: Props) {
           </Text>
 
           {actions.map((item, i) => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={item.key}
               style={[styles.row, i === actions.length - 1 && styles.rowLast]}
-              onPress={() => handleNavigate(item.href)}
-              activeOpacity={0.7}
-            >
+              onPress={() => handleNavigate(item.href)} >
               <View style={styles.rowIconWrap}>
                 <Feather name={item.icon} size={22} color={Colors.brand} />
               </View>
               <Text style={styles.rowLabel}>{item.label}</Text>
               <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
         </Animated.View>
       </View>
