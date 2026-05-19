@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
-import { 
+import { useEffect, useMemo, useState } from 'react';
+import {
   View,
   Text,
   TextInput,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,14 +16,15 @@ import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { PaymentProviderMark } from '@/components/PaymentProviderMark';
 import type { PaymentProvider } from '@/types';
-
-const BALANCE_FCFA = 487_000;
+import { parseBalance, submitWalletWithdrawal } from '@/shared/api';
+import { formatMonthlyFlow, useAuth } from '@/shared/auth';
+import { getAccessToken } from '@/shared/auth/tokenStorage';
 
 const providers = [
-  { id: 'orange' as const, name: 'Orange Money', bg: Colors.provider.orange },
-  { id: 'mtn' as const, name: 'MTN MoMo', bg: Colors.provider.mtn },
-  { id: 'wave' as const, name: 'Wave', bg: Colors.provider.wave },
-  { id: 'moov' as const, name: 'Moov Money', bg: Colors.provider.moov },
+  { id: 'orange' as const, name: 'Orange Money' },
+  { id: 'mtn' as const, name: 'MTN MoMo' },
+  { id: 'wave' as const, name: 'Wave' },
+  { id: 'moov' as const, name: 'Moov Money' },
 ];
 
 const quickAmounts = [5000, 10000, 25000, 50000, 100000];
@@ -36,25 +38,69 @@ const tabularAmount = { fontVariant: ['tabular-nums' as const] };
 
 export default function RetraitScreen() {
   const router = useRouter();
+  const { user, refreshUser } = useAuth();
+  const currentBalance = parseBalance(user?.solde_courant);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>(null);
   const [amountRaw, setAmountRaw] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('+225 07 08 09 10 11');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const amountNum = useMemo(() => {
     const n = Number(amountRaw.replace(/\s/g, '').replace(',', '.'));
     return Number.isFinite(n) ? Math.floor(n) : NaN;
   }, [amountRaw]);
 
-  const exceedsBalance = amountRaw !== '' && (!Number.isFinite(amountNum) || amountNum > BALANCE_FCFA);
+  const exceedsBalance =
+    amountRaw !== '' && (!Number.isFinite(amountNum) || amountNum > currentBalance);
   const belowMinimum =
     amountRaw !== '' && Number.isFinite(amountNum) && amountNum > 0 && amountNum < 100;
   const canSubmit =
     selectedProvider &&
     Number.isFinite(amountNum) &&
     amountNum >= 100 &&
-    amountNum <= BALANCE_FCFA;
+    amountNum <= currentBalance &&
+    !isSubmitting;
 
-  const newBalance = canSubmit ? BALANCE_FCFA - amountNum : null;
+  const newBalance = canSubmit ? currentBalance - amountNum : null;
+
+  useEffect(() => {
+    if (user?.numero_telephone && !phoneNumber) {
+      setPhoneNumber(user.numero_telephone);
+    }
+  }, [user?.numero_telephone, phoneNumber]);
+
+  const handleConfirmWithdrawal = async () => {
+    if (!selectedProvider || !canSubmit) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setErrorMessage('Session expirée. Reconnectez-vous.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await submitWalletWithdrawal(accessToken, {
+      amount: amountNum,
+      provider: selectedProvider,
+    });
+
+    if (!result.ok) {
+      setErrorMessage(result.detail);
+      setIsSubmitting(false);
+      return;
+    }
+
+    await refreshUser();
+    setIsSubmitting(false);
+    router.push({
+      pathname: '/success',
+      params: { type: 'withdrawal', ref: result.data.ref_transaction },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -83,12 +129,15 @@ export default function RetraitScreen() {
           <Text style={styles.balanceTag}>Compte principal</Text>
           <Text style={styles.balanceLabel}>Solde disponible</Text>
           <Text style={[styles.balanceValue, tabularAmount]}>
-            {`${formatMoney(BALANCE_FCFA)}\u202f`}
+            {`${formatMoney(currentBalance)}\u202f`}
             <Text style={styles.balanceCurrency}>FCFA</Text>
           </Text>
           <Text style={styles.balanceHint}>
-            Retrait minimum{' '}
-            <Text style={[styles.balanceHintEm, tabularAmount]}>{formatMoney(100)} FCFA</Text>
+            Sorties ce mois{' '}
+            <Text style={[styles.balanceHintEm, tabularAmount]}>
+              {formatMonthlyFlow(user?.sorties_ce_mois, 'out').replace(' F', ' FCFA')}
+            </Text>
+            {' · '}min. {formatMoney(100)} FCFA
           </Text>
         </View>
 
@@ -122,7 +171,7 @@ export default function RetraitScreen() {
             contentContainerStyle={styles.quickRow}
           >
             {quickAmounts.map((a) => {
-              const disabled = a > BALANCE_FCFA;
+              const disabled = a > currentBalance;
               const selected = amountRaw === a.toString();
               return (
                 <AnimatedPressable
@@ -157,26 +206,27 @@ export default function RetraitScreen() {
             {"Vers quel portefeuille envoyer l'argent ?"}
           </Text>
         </View>
-        <View style={styles.providerGrid}>
+        <View style={styles.providerList}>
           {providers.map((p) => {
             const selected = selectedProvider === p.id;
             return (
               <AnimatedPressable
                 key={p.id}
-                style={[styles.providerCell, selected && styles.providerCellSelected]}
-                onPress={() => setSelectedProvider(p.id)} accessibilityRole="radio"
+                style={[styles.providerRow, selected && styles.providerRowSelected]}
+                onPress={() => setSelectedProvider(p.id)}
+                accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${p.name}, Mobile Money`}
               >
-                <View style={[styles.providerBrandStripe, { backgroundColor: p.bg }]} />
-                <View style={styles.providerCellLogo}>
-                  <PaymentProviderMark providerId={p.id} maxWidth={76} maxHeight={26} />
+                <View style={styles.providerRowLogo}>
+                  <PaymentProviderMark providerId={p.id} maxWidth={64} maxHeight={28} />
                 </View>
-                <View style={styles.providerCellText}>
-                  <Text style={styles.providerCellTitle} numberOfLines={2}>
+                <View style={styles.providerRowDivider} />
+                <View style={styles.providerRowText}>
+                  <Text style={styles.providerRowTitle} numberOfLines={1}>
                     {p.name}
                   </Text>
-                  <Text style={styles.providerCellSubtitle}>Mobile Money</Text>
+                  <Text style={styles.providerRowSubtitle}>Mobile Money</Text>
                 </View>
                 <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
                   {selected ? <View style={styles.radioInner} /> : null}
@@ -205,7 +255,7 @@ export default function RetraitScreen() {
           <View style={styles.previewCard}>
             <Text style={styles.previewEyebrow}>Après ce retrait</Text>
             <View style={styles.previewRow}>
-              <Text style={styles.previewLabel}>Solde estimé</Text>
+              <Text style={styles.previewLabel}>Nouveau solde</Text>
               <Text style={[styles.previewValue, tabularAmount]}>
                 {formatMoney(newBalance)}
                 <Text style={styles.previewCurrency}> FCFA</Text>
@@ -214,8 +264,15 @@ export default function RetraitScreen() {
             <Text style={styles.feeNote}>
               Frais :{' '}
               <Text style={[styles.feeNoteEm, tabularAmount]}>{formatMoney(0)} FCFA</Text>
-              {' '}(offre promotionnelle)
+              
             </Text>
+          </View>
+        ) : null}
+
+        {errorMessage ? (
+          <View style={styles.errorCard}>
+            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Text style={styles.errorBannerText}>{errorMessage}</Text>
           </View>
         ) : null}
 
@@ -231,10 +288,15 @@ export default function RetraitScreen() {
         <AnimatedPressable
           style={[styles.confirmButton, !canSubmit && styles.confirmDisabled]}
           disabled={!canSubmit}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'withdrawal' } })} >
-          <Text style={[styles.confirmText, !canSubmit && { color: Colors.gray[400] }]}>
-            Confirmer le retrait
-          </Text>
+          onPress={() => void handleConfirmWithdrawal()}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Text style={[styles.confirmText, !canSubmit && { color: Colors.gray[400] }]}>
+              Confirmer le retrait
+            </Text>
+          )}
         </AnimatedPressable>
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -425,89 +487,77 @@ const styles = StyleSheet.create({
   },
   quickChipTextDisabled: { color: Colors.gray[400] },
   quickChipTextSelected: { color: Colors.brand },
-  providerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: Theme.spacing.md,
+  /** Liste type « carte de paiement » : logo | séparateur | libellés | radio */
+  providerList: {
     paddingHorizontal: Theme.spacing.page,
+    gap: Theme.spacing.md,
     marginBottom: Theme.spacing.xl,
   },
-  providerCell: {
-    width: '48%',
+  providerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Theme.screen.surface,
     borderRadius: Theme.radius.lg,
     borderWidth: 1,
-    borderColor: Colors.gray[100],
-    paddingVertical: 10,
-    paddingRight: Theme.spacing.sm,
-    paddingLeft: 0,
-    overflow: 'hidden',
+    borderColor: Colors.gray[200],
+    paddingVertical: 14,
+    paddingLeft: Theme.spacing.lg,
+    paddingRight: Theme.spacing.md,
     minHeight: 72,
-    gap: 6,
     ...Theme.shadow.soft,
   },
-  providerCellSelected: {
-    backgroundColor: withOpacity(Colors.brand, 0.07),
-    borderColor: withOpacity(Colors.brand, 0.35),
+  providerRowSelected: {
+    borderColor: Colors.gray[900],
+    borderWidth: 1.5,
   },
-  providerBrandStripe: {
-    width: 4,
-    alignSelf: 'stretch',
-    borderTopRightRadius: 3,
-    borderBottomRightRadius: 3,
-    minHeight: 40,
-  },
-  providerCellLogo: {
-    width: 72,
-    height: 44,
-    backgroundColor: Colors.gray[50],
-    borderRadius: Theme.radius.sm,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
+  providerRowLogo: {
+    width: 56,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  providerCellText: {
+  providerRowDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: Colors.gray[200],
+    marginHorizontal: Theme.spacing.md,
+  },
+  providerRowText: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
+    gap: 4,
   },
-  providerCellTitle: {
+  providerRowTitle: {
     fontFamily: Fonts.outfit.semiBold,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 16,
+    lineHeight: 22,
     color: Colors.gray[900],
-    marginBottom: 3,
-    letterSpacing: -0.15,
+    letterSpacing: -0.2,
   },
-  providerCellSubtitle: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 10,
-    lineHeight: 13,
+  providerRowSubtitle: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.gray[500],
-    letterSpacing: 0.2,
-    opacity: 0.9,
   },
   radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     borderColor: Colors.gray[300],
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: Theme.spacing.sm,
   },
   radioOuterOn: {
-    borderColor: Colors.brand,
+    borderColor: Colors.gray[900],
   },
   radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.brand,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.gray[900],
   },
   inputBare: {
     fontFamily: Fonts.outfit.medium,
@@ -595,6 +645,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   securityEm: { color: Colors.gray[400], paddingHorizontal: 2 },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: withOpacity(Colors.accent, 0.1),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.accent, 0.2),
+  },
+  errorBannerText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.gray[700],
+  },
   confirmButton: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Colors.brand,

@@ -17,6 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import OtpChallenge
 from .serializers import RegisterSerializer, RequestOtpSerializer, VerifyOtpSerializer
 from apps.wallet.models import Wallet
+from apps.wallet.services.user_payload import build_user_wallet_payload
 from ..savings.models import EpargnePersonnelle
 from ..tontine.models import Tontine, TontineMembre
 
@@ -343,7 +344,7 @@ def verify_otp(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    wallet, _ = Wallet.objects.get_or_create(user=user)
+    Wallet.objects.get_or_create(user=user)
 
     challenge.is_used = True
     challenge.save(update_fields=["is_used", "updated_at", "user"])
@@ -353,16 +354,7 @@ def verify_otp(request):
         {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email or "",
-                "first_name": user.first_name or "",
-                "last_name": user.last_name or "",
-                "date_joined": user.date_joined,
-                "numero_telephone": user.numero_telephone,
-                "solde_courant": wallet.solde_courant,
-            },
+            "user": build_user_wallet_payload(user),
         },
         status=status.HTTP_200_OK,
     )
@@ -371,15 +363,4 @@ def verify_otp(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
-    user = request.user
-    wallet, _ = Wallet.objects.get_or_create(user=user)
-    return Response({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "first_name": user.first_name or "",
-        "last_name": user.last_name or "",
-        "date_joined": user.date_joined,
-        "numero_telephone": user.numero_telephone,
-        "solde_courant": wallet.solde_courant,
-    })
+    return Response(build_user_wallet_payload(request.user))

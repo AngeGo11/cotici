@@ -1,9 +1,10 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,10 +12,11 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { RECENT_ACTIVITIES } from '@/data/recentActivities';
+import { useWalletActivities } from '@/modules/activity/hooks';
 
 export default function ActivitesRecentesScreen() {
   const router = useRouter();
+  const { activities, loading, error } = useWalletActivities();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -28,7 +30,17 @@ export default function ActivitesRecentesScreen() {
       <Text style={styles.subtitle}>Historique de vos mouvements sur COTICI</Text>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {RECENT_ACTIVITIES.map((activity) => (
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={Colors.success} />
+          </View>
+        ) : error ? (
+          <Text style={styles.emptyText}>{error}</Text>
+        ) : activities.length === 0 ? (
+          <Text style={styles.emptyText}>Aucune activité pour le moment.</Text>
+        ) : null}
+        {!loading &&
+          activities.map((activity) => (
           <AnimatedPressable
             key={activity.id}
             style={styles.activityItem}
@@ -69,7 +81,7 @@ export default function ActivitesRecentesScreen() {
               <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
             </View>
           </AnimatedPressable>
-        ))}
+          ))}
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
@@ -118,4 +130,13 @@ const styles = StyleSheet.create({
   activityDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500], marginTop: 2 },
   activityRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   activityAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14 },
+  centered: { paddingVertical: 48, alignItems: 'center' },
+  emptyText: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center',
+    paddingHorizontal: Theme.spacing.page,
+    paddingVertical: 24,
+  },
 });

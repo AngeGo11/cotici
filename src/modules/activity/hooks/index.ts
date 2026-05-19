@@ -1,1 +1,1 @@
-export {};
+export { useWalletActivities } from './useWalletActivities';

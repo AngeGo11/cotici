@@ -115,6 +115,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/api/wallet/transactions/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/wallet/transactions/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/api/tontine/create/") {
     await proxyToDjango(req, res, {
       upstreamPath: "/api/tontine/create/",

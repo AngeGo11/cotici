@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,9 +13,15 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { RECENT_ACTIVITIES } from '@/data/recentActivities';
 import { UPCOMING_DEADLINES } from '@/data/upcomingDeadlines';
-import { useAuth, formatFcfaDots, getGreetingName, getUserInitials } from '@/shared/auth';
+import { useWalletActivities } from '@/modules/activity/hooks';
+import {
+  useAuth,
+  formatFcfaDots,
+  formatMonthlyFlow,
+  getGreetingName,
+  getUserInitials,
+} from '@/shared/auth';
 
 function formatTodayFr(): string {
   const d = new Date();
@@ -30,11 +37,15 @@ function formatTodayFr(): string {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { activities, loading: loadingActivities } = useWalletActivities();
+  const recentActivities = activities.slice(0, 5);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const dateLabel = formatTodayFr();
   const greetingName = getGreetingName(user);
   const initials = getUserInitials(user);
   const balanceDisplay = formatFcfaDots(user?.solde_courant);
+  const entreesDisplay = formatMonthlyFlow(user?.entrees_ce_mois, 'in');
+  const sortiesDisplay = formatMonthlyFlow(user?.sorties_ce_mois, 'out');
   const upcomingCount = UPCOMING_DEADLINES.length;
   const accentColor = Colors.success;
 
@@ -89,14 +100,14 @@ export default function HomeScreen() {
             <View style={styles.balanceFootCol}>
               <Text style={styles.balanceFootLabel}>Entrées ce mois</Text>
               <Text style={styles.balanceFootValuePos}>
-                {balanceVisible ? '+75.000 F' : '••••'}
+                {balanceVisible ? entreesDisplay : '••••'}
               </Text>
             </View>
             <View style={styles.balanceFootSep} />
             <View style={styles.balanceFootCol}>
               <Text style={styles.balanceFootLabel}>Sorties ce mois</Text>
               <Text style={styles.balanceFootValueNeg}>
-                {balanceVisible ? '−35.000 F' : '••••'}
+                {balanceVisible ? sortiesDisplay : '••••'}
               </Text>
             </View>
           </View>
@@ -119,8 +130,8 @@ export default function HomeScreen() {
           <AnimatedPressable
             style={styles.quickActionHalf}
             onPress={() => router.push('/retrait')} >
-            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
-              <Feather name="arrow-up-right" size={22} color={Colors.success} />
+            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(Colors.danger, 0.12) }]}>
+              <Feather name="arrow-up-right" size={22} color={Colors.danger} />
             </View>
             <View style={styles.quickActionTexts}>
               <Text style={styles.quickActionTitle}>Retrait</Text>
@@ -167,33 +178,54 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
 
-        {RECENT_ACTIVITIES.map((activity) => (
-          <AnimatedPressable
-            key={activity.id}
-            style={styles.activityItem}
-            onPress={() => router.push(`/activite/${activity.id}`)} >
-            <View style={styles.activityLeft}>
-              <View style={[styles.activityIcon, {
-                backgroundColor: activity.amount > 0 ? withOpacity(Colors.success, 0.1) : withOpacity(Colors.danger, 0.06),
-              }]}>
-                <Feather
-                  name={activity.amount > 0 ? 'arrow-down-left' : 'arrow-up-right'}
-                  size={20}
-                  color={activity.amount > 0 ? Colors.success : Colors.danger}
-                />
+        {loadingActivities ? (
+          <View style={styles.activityLoading}>
+            <ActivityIndicator color={Colors.success} />
+          </View>
+        ) : recentActivities.length === 0 ? (
+          <Text style={styles.activityEmpty}>Aucune activité pour le moment.</Text>
+        ) : (
+          recentActivities.map((activity) => (
+            <AnimatedPressable
+              key={activity.id}
+              style={styles.activityItem}
+              onPress={() => router.push(`/activite/${activity.id}`)}
+            >
+              <View style={styles.activityLeft}>
+                <View
+                  style={[
+                    styles.activityIcon,
+                    {
+                      backgroundColor:
+                        activity.amount > 0
+                          ? withOpacity(Colors.success, 0.1)
+                          : withOpacity(Colors.danger, 0.06),
+                    },
+                  ]}
+                >
+                  <Feather
+                    name={activity.amount > 0 ? 'arrow-down-left' : 'arrow-up-right'}
+                    size={20}
+                    color={activity.amount > 0 ? Colors.success : Colors.danger}
+                  />
+                </View>
+                <View>
+                  <Text style={styles.activityType}>{activity.type}</Text>
+                  <Text style={styles.activityDate}>{activity.date}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.activityType}>{activity.type}</Text>
-                <Text style={styles.activityDate}>{activity.date}</Text>
-              </View>
-            </View>
-            <Text style={[styles.activityAmount, {
-              color: activity.amount > 0 ? Colors.success : Colors.danger,
-            }]}>
-              {activity.amount > 0 ? '+' : ''}{activity.amount.toLocaleString('fr-FR')}F
-            </Text>
-          </AnimatedPressable>
-        ))}
+              <Text
+                style={[
+                  styles.activityAmount,
+                  { color: activity.amount > 0 ? Colors.success : Colors.danger },
+                ]}
+              >
+                {activity.amount > 0 ? '+' : ''}
+                {activity.amount.toLocaleString('fr-FR')}F
+              </Text>
+            </AnimatedPressable>
+          ))
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -362,4 +394,13 @@ const styles = StyleSheet.create({
   activityType: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[900] },
   activityDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
   activityAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14 },
+  activityLoading: { paddingVertical: 24, alignItems: 'center' },
+  activityEmpty: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center',
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
+  },
 });

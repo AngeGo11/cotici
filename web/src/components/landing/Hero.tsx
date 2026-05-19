@@ -91,7 +91,7 @@ export function Hero() {
             variants={fadeUp}
           >
             Gérez tontines de groupe, solidarité, cagnottes d&apos;association et épargne
-            personnelle — le tout en FCFA et Mobile Money, en toute transparence.
+            personnelle de façon simple, rapide et sécurisée.
           </motion.p>
           <motion.div
             id="telecharger"

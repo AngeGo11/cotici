@@ -1,9 +1,10 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,13 +12,29 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { getActivityById } from '@/data/recentActivities';
+import { useWalletActivities } from '@/modules/activity/hooks';
 
 export default function ActiviteDetailScreen() {
   const router = useRouter();
   const { id: idParam } = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const activity = id ? getActivityById(id) : undefined;
+  const { getById, loading } = useWalletActivities();
+  const activity = id ? getById(id) : undefined;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.empty}>
+          <ActivityIndicator color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!activity) {
     return (
@@ -87,7 +104,9 @@ export default function ActiviteDetailScreen() {
           <Row label="Date" value={`${activity.date} · ${activity.time}`} />
           <Row label="Référence" value={activity.reference} mono />
           <Row label="Moyen" value={activity.method} />
-          {activity.accountHint ? <Row label="Compte / contexte" value={activity.accountHint} /> : null}
+          {activity.accountHint ? (
+            <Row label="Numéro de téléphone" value={activity.accountHint} />
+          ) : null}
         </View>
 
         {activity.note ? (

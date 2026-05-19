@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from django.db import transaction
 from django.http import JsonResponse
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -41,6 +42,29 @@ def _unique_ref(prefix: str) -> str:
             return candidate
     return f"{prefix}{uuid4().hex}"[:25]
 
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_transaction_for_user(request):
+    txs = (
+        Transaction.objects.filter(wallet__user=request.user)
+        .select_related("wallet__user")
+        .order_by("-date_transaction")[:50]
+    )
+    data = [
+        {
+            "ref_transaction": t.ref_transaction,
+            "montant_transaction": str(t.montant_transaction),
+            "numero_telephone": getattr(t.wallet.user, "numero_telephone", "") or "",
+            "type_transaction": t.type_transaction,
+            "statut_transaction": t.statut_transaction,
+            "mode_de_paiement": t.mode_de_paiement,
+            "date_transaction": t.date_transaction.isoformat(),
+        }
+        for t in txs
+    ]
+    return Response({"count": len(data), "results": data})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

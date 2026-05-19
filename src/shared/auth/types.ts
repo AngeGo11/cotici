@@ -7,6 +7,8 @@ export interface AuthUser {
   date_joined: string;
   numero_telephone: string;
   solde_courant: string | number;
+  entrees_ce_mois: string | number;
+  sorties_ce_mois: string | number;
 }
 
 export function parseAuthUser(raw: unknown): AuthUser | null {
@@ -22,5 +24,7 @@ export function parseAuthUser(raw: unknown): AuthUser | null {
     date_joined: new Date(o.date_joined as string).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' }),
     numero_telephone: String(o.numero_telephone ?? ''),
     solde_courant: o.solde_courant as string | number,
+    entrees_ce_mois: (o.entrees_ce_mois ?? 0) as string | number,
+    sorties_ce_mois: (o.sorties_ce_mois ?? 0) as string | number,
   };
 }

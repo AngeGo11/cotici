@@ -27,8 +27,8 @@ const configs: Record<string, { icon: keyof typeof Feather.glyphMap; color: stri
   withdrawal: {
     icon: 'check-circle',
     color: Colors.success,
-    title: 'Retrait demandé !',
-    subtitle: 'Les fonds seront envoyés sur votre compte Mobile Money sous peu.',
+    title: 'Retrait réussi !',
+    subtitle: 'Votre solde a été mis à jour. Le transfert Mobile Money sera traité prochainement.',
     buttonLabel: 'Retour à l\'accueil',
     buttonRoute: '/(tabs)',
   },
@@ -105,7 +105,6 @@ export default function SuccessScreen() {
           <Text style={styles.primaryButtonText}>{config.buttonLabel}</Text>
         </AnimatedPressable>
         <AnimatedPressable style={styles.secondaryButton} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.secondaryButtonText}>Retour à l'accueil</Text>
         </AnimatedPressable>
       </View>
     </SafeAreaView>
