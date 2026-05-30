@@ -1,7 +1,17 @@
 export { AuthProvider, useAuth } from './AuthContext';
 export type { AuthUser } from './types';
 export { parseAuthUser } from './types';
-export { getApiBaseUrl, fetchCurrentUser, refreshAccessToken, loadUserFromApi } from './authApi';
+export {
+  getApiBaseUrl,
+  fetchCurrentUser,
+  refreshAccessToken,
+  loadUserFromApi,
+} from './authApi';
+export {
+  fetchWithAuth,
+  loadCurrentUser,
+  AUTH_SESSION_EXPIRED_MESSAGE,
+} from './fetchWithAuth';
 export {
   getGreetingName,
   getUserInitials,

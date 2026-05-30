@@ -8,40 +8,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.utils.utilitaires import _parse_amount, _resolve_payment_mode, _unique_ref
 from apps.wallet.models import Transaction, Wallet
-
 
 def health(request):
     return JsonResponse({"module": "wallet", "status": "ok"})
-
-
-def _parse_amount(value):
-    if value in (None, ""):
-        return None
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
-        return None
-
-
-def _resolve_payment_mode(raw):
-    if raw is None or str(raw).strip() == "":
-        return Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI
-    key = str(raw).strip().upper()
-    valid = {choice for choice, _ in Transaction.MODE_DE_PAIEMENT.choices}
-    if key in valid:
-        return key
-    return None
-
-
-def _unique_ref(prefix: str) -> str:
-    """Référence unique, longueur max 25 (champ modèle)."""
-    for _ in range(8):
-        candidate = f"{prefix}{uuid4().hex}"[:25]
-        if not Transaction.objects.filter(ref_transaction=candidate).exists():
-            return candidate
-    return f"{prefix}{uuid4().hex}"[:25]
-
 
 
 @api_view(["GET"])
@@ -86,7 +57,7 @@ def deposit(request):
         wallet.solde_courant = ancien + amount
         wallet.save(update_fields=["solde_courant"])
 
-        ref = _unique_ref("D")
+        ref = _unique_ref("DEP")
         Transaction.objects.create(
             wallet=wallet,
             solde_courant=wallet.solde_courant,

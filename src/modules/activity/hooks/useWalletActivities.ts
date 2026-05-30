@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { fetchWalletTransactions } from '@/shared/api';
 import { mapTransactionForUi } from '@/shared/api/mapWalletTransaction';
-import { getAccessToken } from '@/shared/auth';
 import type { ActivityDetail } from '@/types';
 
 export function useWalletActivities() {
@@ -13,13 +12,7 @@ export function useWalletActivities() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const token = await getAccessToken();
-    if (!token) {
-      setActivities([]);
-      setLoading(false);
-      return;
-    }
-    const result = await fetchWalletTransactions(token);
+    const result = await fetchWalletTransactions();
     if (result.ok) {
       setActivities(result.data.results.map(mapTransactionForUi));
     } else {

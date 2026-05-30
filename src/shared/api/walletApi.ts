@@ -1,5 +1,5 @@
-import { getApiBaseUrl } from '@/shared/auth/authApi';
 import type { PaymentProvider } from '@/types';
+import { requestWithAuth } from './authFetch';
 
 export type DepositResponse = {
   numero_telephone_utilise: string;
@@ -17,7 +17,6 @@ export type WithdrawalResponse = {
   ref_transaction: string;
 };
 
-
 export type WalletTransaction = {
   ref_transaction: string;
   montant_transaction: string;
@@ -27,7 +26,6 @@ export type WalletTransaction = {
   mode_de_paiement: string;
   date_transaction: string;
 };
-
 
 export type WalletTransactionsResponse = {
   count: number;
@@ -60,97 +58,76 @@ function extractErrorDetail(body: unknown, fallback: string): string {
 }
 
 export async function submitWalletDeposit(
-  accessToken: string,
   params: { amount: number; provider: NonNullable<PaymentProvider> },
 ): Promise<{ ok: true; data: DepositResponse } | { ok: false; detail: string }> {
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/deposit/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        montant_depose: params.amount,
-        mode_de_paiement: paymentProviderToMode(params.provider),
-      }),
-    });
+  const auth = await requestWithAuth('/api/wallet/deposit/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      montant_depose: params.amount,
+      mode_de_paiement: paymentProviderToMode(params.provider),
+    }),
+  });
+  if (!auth.ok) return auth;
 
-    const body: unknown = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return { ok: false, detail: extractErrorDetail(body, 'Impossible d’effectuer le dépôt. Réessayez.') };
-    }
-
-    const data = body as DepositResponse;
-    if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
-      return { ok: false, detail: 'Réponse serveur invalide.' };
-    }
-
-    return { ok: true, data };
-  } catch {
-    return { ok: false, detail: 'Serveur inaccessible. Vérifiez votre connexion.' };
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible d’effectuer le dépôt. Réessayez.') };
   }
+
+  const data = body as DepositResponse;
+  if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+
+  return { ok: true, data };
 }
 
 export async function submitWalletWithdrawal(
-  accessToken: string,
   params: { amount: number; provider: NonNullable<PaymentProvider> },
 ): Promise<{ ok: true; data: WithdrawalResponse } | { ok: false; detail: string }> {
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/withdrawal/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        montant_a_retirer: params.amount,
-        mode_de_paiement: paymentProviderToMode(params.provider),
-      }),
-    });
+  const auth = await requestWithAuth('/api/wallet/withdrawal/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      montant_a_retirer: params.amount,
+      mode_de_paiement: paymentProviderToMode(params.provider),
+    }),
+  });
+  if (!auth.ok) return auth;
 
-    const body: unknown = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        detail: extractErrorDetail(body, 'Impossible d’effectuer le retrait. Réessayez.'),
-      };
-    }
-
-    const data = body as WithdrawalResponse;
-    if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
-      return { ok: false, detail: 'Réponse serveur invalide.' };
-    }
-
-    return { ok: true, data };
-  } catch {
-    return { ok: false, detail: 'Serveur inaccessible. Vérifiez votre connexion.' };
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return {
+      ok: false,
+      detail: extractErrorDetail(body, 'Impossible d’effectuer le retrait. Réessayez.'),
+    };
   }
+
+  const data = body as WithdrawalResponse;
+  if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+
+  return { ok: true, data };
 }
 
-export async function fetchWalletTransactions(
-  accessToken: string,
-): Promise<{ ok: true; data: WalletTransactionsResponse } | { ok: false; detail: string }> {
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/wallet/transactions/`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      return {
-        ok: false,
-        detail: extractErrorDetail(body, 'Impossible de charger les transactions.'),
-      };
-    }
-    const data = body as WalletTransactionsResponse;
-    if (!Array.isArray(data?.results)) {
-      return { ok: false, detail: 'Réponse serveur invalide.' };
-    }
-    return { ok: true, data };
-  } catch {
-    return { ok: false, detail: 'Serveur inaccessible.' };
+export async function fetchWalletTransactions(): Promise<
+  { ok: true; data: WalletTransactionsResponse } | { ok: false; detail: string }
+> {
+  const auth = await requestWithAuth('/api/wallet/transactions/', { method: 'GET' });
+  if (!auth.ok) return auth;
+
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return {
+      ok: false,
+      detail: extractErrorDetail(body, 'Impossible de charger les transactions.'),
+    };
   }
+  const data = body as WalletTransactionsResponse;
+  if (!Array.isArray(data?.results)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
 }

@@ -165,9 +165,46 @@ const server = http.createServer(async (req, res) => {
   }
 
 
+  if (req.method === "GET" && req.url === "/api/savings/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/savings/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/api/savings/create/") {
     await proxyToDjango(req, res, {
       upstreamPath: "/api/savings/create/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.startsWith("/api/savings/detail")) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/savings/detail/${query}`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+
+  if (req.method === "POST" && req.url === "/api/savings/deposit/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/savings/deposit/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "PATCH" && req.url === "/api/savings/update/") {
+    await proxyToDjango(req, res, {
+      method: "PATCH",
+      upstreamPath: "/api/savings/update/",
       forwardBearer: true,
     });
     return;

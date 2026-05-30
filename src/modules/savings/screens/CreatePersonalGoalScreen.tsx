@@ -1,30 +1,75 @@
 import { useState } from 'react';
-import { 
+import {
   View,
   Text,
   TextInput,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { createSavingsGoal } from '@/shared/api';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 
-const categories = ['Voyage', 'Projet', 'Mariage', 'Éducation', 'Santé', 'Autre'] as const;
+const categories = ['Voyage', 'Projet personnel', 'Mariage', 'Éducation', 'Santé', 'Autre'] as const;
+
+function parsePositiveInt(value: string): number | null {
+  const n = Number(value.replace(/\s/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n);
+}
 
 export default function CreatePersonalGoalScreen() {
   const router = useRouter();
   const [goalName, setGoalName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [duration, setDuration] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
+  const [category, setCategory] = useState<(typeof categories)[number] | null>(null);
   const [otherCategory, setOtherCategory] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const monthlyAmount = targetAmount && duration ? Math.ceil(Number(targetAmount) / Number(duration)) : 0;
+  const montantCible = parsePositiveInt(targetAmount);
+  const dureeMois = parsePositiveInt(duration);
+  const monthlyAmount =
+    montantCible && dureeMois ? Math.ceil(montantCible / dureeMois) : 0;
+
+  const canSubmit =
+    Boolean(goalName.trim()) &&
+    montantCible !== null &&
+    dureeMois !== null &&
+    category !== null &&
+    (category !== 'Autre' || Boolean(otherCategory.trim())) &&
+    !isSubmitting;
+
+  const handleCreate = async () => {
+    if (!canSubmit || !category || montantCible === null || dureeMois === null) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    const result = await createSavingsGoal({
+      nom_projet: goalName.trim(),
+      montant_cible: montantCible,
+      duree: dureeMois,
+      categorie: category,
+      ...(category === 'Autre' ? { value_categorie: otherCategory.trim() } : {}),
+    });
+
+    if (!result.ok) {
+      setErrorMessage(result.detail);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    router.push({ pathname: '/success', params: { type: 'create-goal' } });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -129,16 +174,31 @@ export default function CreatePersonalGoalScreen() {
               </View>
             </View>
             <Text style={styles.previewSub}>
-              Pour atteindre {Number(targetAmount).toLocaleString('fr-FR')} F en {duration} mois
+              Pour atteindre {montantCible!.toLocaleString('fr-FR')} F en {dureeMois} mois
             </Text>
           </View>
         )}
 
+        {errorMessage ? (
+          <View style={styles.errorCard}>
+            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
         <AnimatedPressable
-          style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-goal' } })} >
-          <Feather name="check-circle" size={20} color={Colors.white} />
-          <Text style={styles.createButtonText}>Créer mon objectif</Text>
+          style={[styles.createButton, !canSubmit && styles.createButtonDisabled]}
+          disabled={!canSubmit}
+          onPress={() => void handleCreate()}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <>
+              <Feather name="check-circle" size={20} color={Colors.white} />
+              <Text style={styles.createButtonText}>Créer mon objectif</Text>
+            </>
+          )}
         </AnimatedPressable>
         <Text style={styles.footerNote}>Vous pourrez suivre votre progression en temps réel dans l&apos;onglet Épargne.</Text>
 
@@ -295,7 +355,27 @@ const styles = StyleSheet.create({
     borderRadius: Theme.radius.md,
     ...Theme.shadow.soft,
   },
+  createButtonDisabled: { opacity: 0.5 },
   createButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 17, color: Colors.white },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: withOpacity(Colors.accent, 0.1),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.accent, 0.25),
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[700],
+    lineHeight: 20,
+  },
   footerNote: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 12,

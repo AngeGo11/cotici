@@ -9,6 +9,8 @@ export interface AuthUser {
   solde_courant: string | number;
   entrees_ce_mois: string | number;
   sorties_ce_mois: string | number;
+  epargne_totale: string | number;
+  tontine_cotisations_mois: string | number;
 }
 
 export function parseAuthUser(raw: unknown): AuthUser | null {
@@ -26,5 +28,7 @@ export function parseAuthUser(raw: unknown): AuthUser | null {
     solde_courant: o.solde_courant as string | number,
     entrees_ce_mois: (o.entrees_ce_mois ?? 0) as string | number,
     sorties_ce_mois: (o.sorties_ce_mois ?? 0) as string | number,
+    epargne_totale: (o.epargne_totale ?? 0) as string | number,
+    tontine_cotisations_mois: (o.tontine_cotisations_mois ?? 0) as string | number,
   };
 }

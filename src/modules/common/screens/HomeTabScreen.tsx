@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
@@ -36,18 +39,146 @@ function formatTodayFr(): string {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
+  const { user, refreshUser } = useAuth();
   const { activities, loading: loadingActivities } = useWalletActivities();
   const recentActivities = activities.slice(0, 5);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const statScrollRef = useRef<ScrollView>(null);
+  const [statPageIndex, setStatPageIndex] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUser();
+    }, [refreshUser]),
+  );
   const dateLabel = formatTodayFr();
   const greetingName = getGreetingName(user);
   const initials = getUserInitials(user);
   const balanceDisplay = formatFcfaDots(user?.solde_courant);
   const entreesDisplay = formatMonthlyFlow(user?.entrees_ce_mois, 'in');
   const sortiesDisplay = formatMonthlyFlow(user?.sorties_ce_mois, 'out');
+  const epargneDisplay = `${formatFcfaDots(user?.epargne_totale)} F`;
+  const tontineDisplay = `${formatFcfaDots(user?.tontine_cotisations_mois)} F`;
   const upcomingCount = UPCOMING_DEADLINES.length;
   const accentColor = Colors.success;
+
+  const statCards = useMemo(
+    () => [
+      {
+        id: 'entrees',
+        label: 'Entrées ce mois',
+        shortLabel: 'Entrées',
+        value: entreesDisplay,
+        icon: 'arrow-down-left' as const,
+        tone: 'positive' as const,
+        onPress: undefined,
+      },
+      {
+        id: 'sorties',
+        label: 'Sorties ce mois',
+        shortLabel: 'Sorties',
+        value: sortiesDisplay,
+        icon: 'arrow-up-right' as const,
+        tone: 'negative' as const,
+        onPress: undefined,
+      },
+      {
+        id: 'epargne',
+        label: 'Mis de côté',
+        shortLabel: 'Mis en épargne',
+        value: epargneDisplay,
+        icon: 'target' as const,
+        tone: 'neutral' as const
+      },
+      {
+        id: 'tontine',
+        label: 'Cotisations tontine',
+        shortLabel: 'Engagements tontines',
+        value: tontineDisplay,
+        icon: 'users' as const,
+        tone: 'neutral' as const
+      },
+    ],
+    [entreesDisplay, sortiesDisplay, epargneDisplay, tontineDisplay, router],
+  );
+
+  const statToneStyles = {
+    positive: {
+      iconBg: withOpacity(Colors.success, 0.12),
+      iconColor: Colors.success,
+      valueStyle: styles.statChipValuePos,
+    },
+    negative: {
+      iconBg: withOpacity(Colors.danger, 0.12),
+      iconColor: Colors.danger,
+      valueStyle: styles.statChipValueNeg,
+    },
+    neutral: {
+      iconBg: withOpacity(accentColor, 0.12),
+      iconColor: accentColor,
+      valueStyle: null,
+    },
+  } as const;
+
+  const statPages = useMemo(() => {
+    const pages: (typeof statCards)[] = [];
+    for (let i = 0; i < statCards.length; i += 2) {
+      pages.push(statCards.slice(i, i + 2));
+    }
+    return pages;
+  }, [statCards]);
+
+  const canScrollStatsForward = statPageIndex < statPages.length - 1;
+  const canScrollStatsBack = statPageIndex > 0;
+
+  const handleStatScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const page = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+      setStatPageIndex(page);
+    },
+    [screenWidth],
+  );
+
+  const scrollStatsForward = useCallback(() => {
+    const nextPage = Math.min(statPageIndex + 1, statPages.length - 1);
+    statScrollRef.current?.scrollTo({ x: nextPage * screenWidth, animated: true });
+    setStatPageIndex(nextPage);
+  }, [statPageIndex, statPages.length, screenWidth]);
+
+  const scrollStatsBack = useCallback(() => {
+    const prevPage = Math.max(statPageIndex - 1, 0);
+    statScrollRef.current?.scrollTo({ x: prevPage * screenWidth, animated: true });
+    setStatPageIndex(prevPage);
+  }, [statPageIndex, screenWidth]);
+
+  const renderStatChip = (stat: (typeof statCards)[number]) => {
+    const tone = statToneStyles[stat.tone];
+    const Chip = stat.onPress ? AnimatedPressable : View;
+    return (
+      <Chip
+        key={stat.id}
+        {...(stat.onPress ? { onPress: stat.onPress } : {})}
+        style={styles.statChip}
+        {...(stat.onPress
+          ? { accessibilityRole: 'button' as const, accessibilityLabel: stat.label }
+          : {})}
+      >
+        <View style={styles.statChipTopRow}>
+          <View style={[styles.statChipIconCircle, { backgroundColor: tone.iconBg }]}>
+            <Feather name={stat.icon} size={15} color={tone.iconColor} />
+          </View>
+          {stat.onPress ? (
+            <Feather name="chevron-right" size={14} color={Colors.gray[300]} />
+          ) : null}
+        </View>
+        <Text style={styles.statChipLabel}>{stat.shortLabel}</Text>
+        <Text style={[styles.statChipValue, tone.valueStyle]}>
+          {balanceVisible ? stat.value : '••••'}
+        </Text>
+      </Chip>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -71,73 +202,134 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
 
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceTopRow}>
-            <View style={styles.balanceTopLeft}>
-              <Text style={styles.balanceAccountTag}>Compte principal</Text>
-              <Text style={styles.balanceLabel}>Solde disponible</Text>
+        <View style={styles.walletHero}>
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceCardOrbTop} pointerEvents="none" />
+            <View style={styles.balanceCardOrbBottom} pointerEvents="none" />
+
+            <View style={styles.balanceTopRow}>
+              <View style={styles.balanceTopLeft}>
+                <View style={styles.balanceAccountTagRow}>
+                  <View style={styles.balanceAccountDot} />
+                  <Text style={styles.balanceAccountTag}>Compte principal</Text>
+                </View>
+                <Text style={styles.balanceLabel}>Solde disponible</Text>
+              </View>
+              <AnimatedPressable
+                style={styles.eyeButton}
+                onPress={() => setBalanceVisible(!balanceVisible)}
+                accessibilityRole="button"
+                accessibilityLabel={balanceVisible ? 'Masquer le solde' : 'Afficher le solde'}
+              >
+                <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={15} color={Colors.white} />
+              </AnimatedPressable>
             </View>
+
+            <View style={styles.balanceValueBlock}>
+              {balanceVisible ? (
+                <>
+                  <Text style={styles.balanceValue}>{balanceDisplay}</Text>
+                  <Text style={styles.balanceCurrency}>FCFA</Text>
+                </>
+              ) : (
+                <Text style={styles.balanceValue}>••••••</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.actionPillsRow}>
             <AnimatedPressable
-              style={styles.eyeButton}
-              onPress={() => setBalanceVisible(!balanceVisible)}
+              style={[styles.actionPill, styles.actionPillDeposit]}
+              onPress={() => router.push('/deposit-to-account')}
+              accessibilityRole="button"
+              accessibilityLabel="Faire un dépôt"
             >
-              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={15} color={Colors.white} />
+              <View style={styles.actionPillIconCircle}>
+                <Feather name="plus" size={16} color={Colors.brand} />
+              </View>
+              <View style={styles.actionPillTexts}>
+                <Text style={styles.actionPillLabel}>Dépôt</Text>
+                <Text style={styles.actionPillHint}>Vers COTICI</Text>
+              </View>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.actionPill, styles.actionPillWithdraw]}
+              onPress={() => router.push('/retrait')}
+              accessibilityRole="button"
+              accessibilityLabel="Faire un retrait"
+            >
+              <View style={[styles.actionPillIconCircle, styles.actionPillIconCircleWithdraw]}>
+                <Feather name="arrow-up-right" size={15} color={Colors.danger} />
+              </View>
+              <View style={styles.actionPillTexts}>
+                <Text style={[styles.actionPillLabel, styles.actionPillLabelWithdraw]}>Retrait</Text>
+                <Text style={styles.actionPillHintWithdraw}>Mobile Money</Text>
+              </View>
             </AnimatedPressable>
           </View>
-          <View>
-            {balanceVisible ? (
-              <Text style={styles.balanceValue}>
-                {balanceDisplay} <Text style={styles.balanceCurrency}>FCFA</Text>
-              </Text>
-            ) : (
-              <Text style={styles.balanceValue}>••••••</Text>
-            )}
+
+          <View style={styles.statsBlock}>
+            <View style={styles.statsBlockHeader}>
+              <Text style={styles.statsBlockTitle}>Ce mois</Text>
+              {statPages.length > 1 ? (
+                <Text style={styles.statsBlockHint}>
+                  {statPageIndex + 1}/{statPages.length}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.statCarouselWrap}>
+              <ScrollView
+                ref={statScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                decelerationRate="fast"
+                snapToInterval={screenWidth}
+                snapToAlignment="start"
+                disableIntervalMomentum
+                onMomentumScrollEnd={handleStatScrollEnd}
+                onScrollEndDrag={handleStatScrollEnd}
+                style={styles.statCarousel}
+              >
+                {statPages.map((page, pageIndex) => (
+                  <View
+                    key={`stat-page-${pageIndex}`}
+                    style={[
+                      styles.statCarouselPage,
+                      { width: screenWidth },
+                      pageIndex === 0 &&
+                        pageIndex < statPages.length - 1 &&
+                        styles.statCarouselPageWithChevronRight,
+                      pageIndex > 0 && styles.statCarouselPageWithChevronLeft,
+                    ]}
+                  >
+                    {page.map((stat) => renderStatChip(stat))}
+                  </View>
+                ))}
+              </ScrollView>
+              {canScrollStatsBack ? (
+                <AnimatedPressable
+                  style={[styles.statCarouselChevron, styles.statCarouselChevronLeft]}
+                  onPress={scrollStatsBack}
+                  accessibilityRole="button"
+                  accessibilityLabel="Voir les indicateurs précédents"
+                >
+                  <Feather name="chevron-left" size={18} color={Colors.gray[700]} />
+                </AnimatedPressable>
+              ) : null}
+              {canScrollStatsForward ? (
+                <AnimatedPressable
+                  style={styles.statCarouselChevron}
+                  onPress={scrollStatsForward}
+                  accessibilityRole="button"
+                  accessibilityLabel="Voir les indicateurs suivants"
+                >
+                  <Feather name="chevron-right" size={18} color={Colors.gray[700]} />
+                </AnimatedPressable>
+              ) : null}
+            </View>
           </View>
-
-          <View style={styles.balanceDivider} />
-
-          <View style={styles.balanceFootRow}>
-            <View style={styles.balanceFootCol}>
-              <Text style={styles.balanceFootLabel}>Entrées ce mois</Text>
-              <Text style={styles.balanceFootValuePos}>
-                {balanceVisible ? entreesDisplay : '••••'}
-              </Text>
-            </View>
-            <View style={styles.balanceFootSep} />
-            <View style={styles.balanceFootCol}>
-              <Text style={styles.balanceFootLabel}>Sorties ce mois</Text>
-              <Text style={styles.balanceFootValueNeg}>
-                {balanceVisible ? sortiesDisplay : '••••'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <Text style={styles.quickActionsTitle}>Mon argent</Text>
-        <View style={styles.quickActionsCard}>
-          <AnimatedPressable
-            style={styles.quickActionHalf}
-            onPress={() => router.push('/deposit-to-account')} >
-            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(accentColor, 0.12) }]}>
-              <Feather name="arrow-down-left" size={22} color={accentColor} />
-            </View>
-            <View style={styles.quickActionTexts}>
-              <Text style={styles.quickActionTitle}>Dépôt</Text>
-              <Text style={styles.quickActionHint}>Vers votre solde COTICI</Text>
-            </View>
-          </AnimatedPressable>
-          <View style={styles.quickActionsSep} />
-          <AnimatedPressable
-            style={styles.quickActionHalf}
-            onPress={() => router.push('/retrait')} >
-            <View style={[styles.quickActionIconSm, { backgroundColor: withOpacity(Colors.danger, 0.12) }]}>
-              <Feather name="arrow-up-right" size={22} color={Colors.danger} />
-            </View>
-            <View style={styles.quickActionTexts}>
-              <Text style={styles.quickActionTitle}>Retrait</Text>
-              <Text style={styles.quickActionHint}>Vers Mobile Money</Text>
-            </View>
-          </AnimatedPressable>
         </View>
 
         <View style={styles.navLinks}>
@@ -270,75 +462,257 @@ const styles = StyleSheet.create({
     ...Theme.shadow.soft,
   },
   bellDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger },
+  walletHero: {
+    marginBottom: Theme.spacing.lg,
+  },
   balanceCard: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Colors.success,
-    borderRadius: Theme.radius.lg,
-    paddingVertical: Theme.spacing.md + 2,
+    borderRadius: Theme.radius.xl,
+    paddingTop: Theme.spacing.lg,
+    paddingBottom: Theme.spacing.xl + 6,
     paddingHorizontal: Theme.spacing.lg,
-    marginBottom: Theme.spacing.lg,
+    overflow: 'hidden',
     ...Theme.shadow.brandHero,
+  },
+  balanceCardOrbTop: {
+    position: 'absolute',
+    top: -36,
+    right: -28,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  balanceCardOrbBottom: {
+    position: 'absolute',
+    bottom: -48,
+    left: -32,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   balanceTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
   },
   balanceTopLeft: { flex: 1, paddingRight: Theme.spacing.sm },
+  balanceAccountTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  balanceAccountDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+  },
   balanceAccountTag: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 10,
     color: 'rgba(255,255,255,0.75)',
     letterSpacing: 0.6,
-    marginBottom: 2,
     textTransform: 'uppercase',
   },
-  balanceLabel: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: 'rgba(255,255,255,0.88)' },
+  balanceLabel: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: 'rgba(255,255,255,0.9)' },
   eyeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
-  balanceValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 30, color: Colors.white, letterSpacing: -0.3 },
-  balanceCurrency: { fontSize: 17, fontFamily: Fonts.spaceGrotesk.bold },
-  balanceDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: Theme.spacing.md, marginBottom: Theme.spacing.sm + 2 },
-  balanceFootRow: { flexDirection: 'row', alignItems: 'stretch' },
-  balanceFootCol: { flex: 1 },
-  balanceFootSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: Theme.spacing.sm },
-  balanceFootLabel: { fontFamily: Fonts.outfit.regular, fontSize: 10, color: 'rgba(255,255,255,0.65)', marginBottom: 2 },
-  balanceFootValuePos: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 15, color: 'rgba(255,255,255,0.95)' },
-  balanceFootValueNeg: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 15, color: 'rgba(255,255,255,0.95)' },
-  quickActionsTitle: {
+  balanceValueBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  balanceValue: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 34,
+    color: Colors.white,
+    letterSpacing: -0.5,
+    lineHeight: 40,
+  },
+  balanceCurrency: {
     fontFamily: Fonts.outfit.medium,
-    fontSize: 13,
-    color: Colors.gray[500],
-    paddingHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.md,
-    letterSpacing: 0.2,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.75)',
+    marginBottom: 2,
   },
-  quickActionsCard: {
+  balanceEpargneHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Theme.spacing.md,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Theme.radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  balanceEpargneHintText: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  actionPillsRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.xl,
-    backgroundColor: Theme.screen.surface,
+    paddingHorizontal: Theme.spacing.page,
+    gap: 10,
+    marginTop: -22,
+    marginBottom: Theme.spacing.lg,
+    zIndex: 2,
+  },
+  actionPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    overflow: 'hidden',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     ...Theme.shadow.card,
   },
-  quickActionHalf: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, paddingHorizontal: 14 },
-  quickActionsSep: { width: 1, backgroundColor: Colors.gray[100], alignSelf: 'stretch', marginVertical: 12 },
-  quickActionIconSm: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  quickActionTexts: { flex: 1 },
-  quickActionTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900], marginBottom: 2 },
-  quickActionHint: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500], lineHeight: 16 },
+  actionPillDeposit: {
+    backgroundColor: Colors.brand,
+  },
+  actionPillWithdraw: {
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+  },
+  actionPillIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionPillIconCircleWithdraw: {
+    backgroundColor: withOpacity(Colors.danger, 0.1),
+  },
+  actionPillTexts: {
+    flex: 1,
+    gap: 1,
+  },
+  actionPillLabel: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 15,
+    color: Colors.white,
+  },
+  actionPillLabelWithdraw: {
+    color: Colors.gray[900],
+  },
+  actionPillHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+  },
+  actionPillHintWithdraw: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 11,
+    color: Colors.gray[500],
+  },
+  statsBlock: {
+    gap: Theme.spacing.sm,
+  },
+  statsBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: Theme.spacing.page,
+  },
+  statsBlockTitle: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 17,
+    color: Colors.gray[900],
+  },
+  statsBlockHint: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 12,
+    color: Colors.gray[400],
+  },
+  statCarouselWrap: {
+    position: 'relative',
+  },
+  statCarousel: {
+    overflow: 'hidden',
+  },
+  statCarouselPage: {
+    flexDirection: 'row',
+    paddingHorizontal: Theme.spacing.page,
+    gap: 10,
+  },
+  statCarouselPageWithChevronRight: {
+    paddingRight: Theme.spacing.page + 30,
+  },
+  statCarouselPageWithChevronLeft: {
+    paddingLeft: Theme.spacing.page + 30,
+  },
+  statCarouselChevron: {
+    position: 'absolute',
+    right: Theme.spacing.page - 6,
+    top: '50%',
+    marginTop: -18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Theme.shadow.soft,
+  },
+  statCarouselChevronLeft: {
+    right: undefined,
+    left: Theme.spacing.page - 6,
+  },
+  statChip: {
+    flex: 1,
+    backgroundColor: Theme.screen.surface,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    ...Theme.shadow.soft,
+  },
+  statChipTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Theme.spacing.sm,
+  },
+  statChipIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statChipLabel: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    color: Colors.gray[500],
+    marginBottom: 4,
+  },
+  statChipValue: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 15,
+    color: Colors.gray[900],
+  },
+  statChipValuePos: { color: Colors.success },
+  statChipValueNeg: { color: Colors.danger },
   navLinks: { paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md, marginBottom: Theme.spacing.xl },
   navLinkButton: {
     flexDirection: 'row',

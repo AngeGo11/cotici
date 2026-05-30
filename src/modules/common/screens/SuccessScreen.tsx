@@ -35,7 +35,7 @@ const configs: Record<string, { icon: keyof typeof Feather.glyphMap; color: stri
   savings: {
     icon: 'trending-up',
     color: Colors.success,
-    title: 'Épargne ajoutée !',
+    title: 'Montant ajoutée !',
     subtitle: 'Votre épargne a été mise à jour avec succès.',
     buttonLabel: 'Voir mon épargne',
     buttonRoute: '/(tabs)/savings',

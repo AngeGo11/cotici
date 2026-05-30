@@ -1,11 +1,12 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Svg, Circle } from 'react-native-svg';
@@ -13,20 +14,47 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { SAVINGS_CONTRIBUTIONS } from '@/data/savingsContributions';
+import { useSavingsDetail } from '@/modules/savings/hooks/useSavingsDetail';
 
-const savedAmount = 325000;
-const goalAmount = 500000;
-const percentage = Math.round((savedAmount / goalAmount) * 100);
 const size = 200;
 const strokeWidth = 14;
 const radius = (size - strokeWidth) / 2;
 const circumference = 2 * Math.PI * radius;
-const progressOffset = ((100 - percentage) / 100) * circumference;
 
 const contributionsPreview = SAVINGS_CONTRIBUTIONS.slice(0, 3);
 
 export default function SavingsDetailScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { detail, loading, error } = useSavingsDetail(id);
+
+  const percentage = detail?.percentage ?? 0;
+  const progressOffset = ((100 - percentage) / 100) * circumference;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error ?? 'Objectif introuvable.'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -36,7 +64,8 @@ export default function SavingsDetailScreen() {
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </AnimatedPressable>
           <AnimatedPressable
-            style={styles.historyPill} onPress={() => router.push('/savings-history')}
+            style={styles.historyPill}
+            onPress={() => router.push({ pathname: '/savings-history', params: { id: detail.id } })}
           >
             <Feather name="clock" size={16} color={Colors.brand} />
             <Text style={styles.historyLink}>Historique</Text>
@@ -47,8 +76,8 @@ export default function SavingsDetailScreen() {
           <View style={styles.titleIcon}>
             <Feather name="target" size={26} color={Colors.success} />
           </View>
-          <Text style={styles.title}>{"Mon objectif d'épargne"}</Text>
-          <Text style={styles.subtitle}>Nouveau Projet</Text>
+          <Text style={styles.title}>{detail.name}</Text>
+          {detail.category ? <Text style={styles.subtitle}>{detail.category}</Text> : null}
         </View>
 
         <View style={styles.progressShell}>
@@ -78,7 +107,7 @@ export default function SavingsDetailScreen() {
           <View style={styles.amountRow}>
             <View>
               <Text style={styles.amountLabel}>Montant épargné</Text>
-              <Text style={styles.amountValue}>{savedAmount.toLocaleString('fr-FR')} F</Text>
+              <Text style={styles.amountValue}>{detail.saved.toLocaleString('fr-FR')} F</Text>
             </View>
             <View style={styles.trendIcon}>
               <Feather name="trending-up" size={22} color={Colors.success} />
@@ -88,11 +117,11 @@ export default function SavingsDetailScreen() {
           <View style={styles.amountRow}>
             <View>
               <Text style={styles.amountLabel}>Objectif</Text>
-              <Text style={styles.amountValueDark}>{goalAmount.toLocaleString('fr-FR')} F</Text>
+              <Text style={styles.amountValueDark}>{detail.target.toLocaleString('fr-FR')} F</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.amountLabel}>Restant</Text>
-              <Text style={styles.amountValueBrand}>{(goalAmount - savedAmount).toLocaleString('fr-FR')} F</Text>
+              <Text style={styles.amountValueBrand}>{detail.remaining.toLocaleString('fr-FR')} F</Text>
             </View>
           </View>
         </View>
@@ -104,15 +133,23 @@ export default function SavingsDetailScreen() {
               <Feather name="calendar" size={16} color={Colors.success} />
               <Text style={styles.statLabel}>Durée</Text>
             </View>
-            <Text style={styles.statValue}>6 mois</Text>
-            <Text style={styles.statSub}>3 mois restants</Text>
+            <Text style={styles.statValue}>
+              {detail.durationMonths} mois
+            </Text>
+            <Text style={styles.statSub}>
+              {detail.monthsRemaining > 0
+                ? `${detail.monthsRemaining} mois restants`
+                : 'Durée écoulée'}
+            </Text>
           </View>
           <View style={styles.statCard}>
             <View style={styles.statIconRow}>
               <Feather name="trending-up" size={16} color={Colors.brand} />
               <Text style={styles.statLabel}>Mensuel</Text>
             </View>
-            <Text style={styles.statValue}>83.333 F</Text>
+            <Text style={styles.statValue}>
+              {detail.monthlyAmount.toLocaleString('fr-FR')} F
+            </Text>
             <Text style={styles.statSub}>À épargner</Text>
           </View>
         </View>
@@ -120,13 +157,15 @@ export default function SavingsDetailScreen() {
         <View style={styles.actions}>
           <AnimatedPressable
             style={styles.addButton}
-            onPress={() => router.push('/add-to-savings')} >
+            onPress={() => router.push({ pathname: '/add-to-savings', params: { id: detail.id } })}
+          >
             <Feather name="plus-circle" size={20} color={Colors.white} />
             <Text style={styles.addButtonText}>Ajouter de l&apos;argent</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.editButton}
-            onPress={() => router.push('/modifier-objectif')} >
+            onPress={() => router.push({ pathname: '/modifier-objectif', params: { id: detail.id } })}
+          >
             <Feather name="edit-2" size={18} color={Colors.gray[700]} />
             <Text style={styles.editButtonText}>Modifier l&apos;objectif</Text>
           </AnimatedPressable>
@@ -157,6 +196,8 @@ export default function SavingsDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg },
   scroll: { paddingBottom: 100 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Theme.spacing.page },
+  errorText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.danger, textAlign: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

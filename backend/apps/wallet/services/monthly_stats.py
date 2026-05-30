@@ -6,9 +6,13 @@ from django.utils import timezone
 from apps.wallet.models import Transaction
 
 
+def month_start():
+    return timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 def get_monthly_entrees_sorties(user) -> tuple[Decimal, Decimal]:
-    """Somme des dépôts (entrées) et retraits + débits (sorties) réussis du mois calendaire en cours."""
-    start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    """Dépôts (entrées) et retraits + cotisations tontine (sorties) du mois en cours."""
+    start = month_start()
     base = Transaction.objects.filter(
         wallet__user=user,
         statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,

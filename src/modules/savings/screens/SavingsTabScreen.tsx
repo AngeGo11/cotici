@@ -1,23 +1,19 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Svg, Circle } from 'react-native-svg';
+import { useSavingsGoals } from '@/modules/savings/hooks/useSavingsGoals';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-
-const goals = [
-  { id: '1', name: 'Nouveau Projet', saved: 325000, target: 500000, icon: 'target' as const },
-  { id: '2', name: 'Vacances Abidjan', saved: 120000, target: 300000, icon: 'sun' as const },
-  { id: '3', name: "Fonds d'urgence", saved: 75000, target: 100000, icon: 'shield' as const },
-];
 
 function MiniProgress({ percentage }: { percentage: number }) {
   const size = 52;
@@ -56,10 +52,12 @@ function GoalBar({ pct }: { pct: number }) {
 
 export default function SavingsListScreen() {
   const router = useRouter();
+  const { goals, loading, error } = useSavingsGoals();
 
   const totalSaved = goals.reduce((s, g) => s + g.saved, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
-  const globalPct = Math.min(100, Math.round((totalSaved / totalTarget) * 100));
+  const globalPct =
+    totalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalTarget) * 100)) : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -100,13 +98,37 @@ export default function SavingsListScreen() {
 
         <Text style={styles.sectionEyebrow}>Par objectif</Text>
 
+        {loading ? (
+          <ActivityIndicator color={Colors.success} style={styles.loader} />
+        ) : null}
+
+        {!loading && error ? (
+          <View style={styles.messageCard}>
+            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Text style={styles.messageText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {!loading && !error && goals.length === 0 ? (
+          <View style={styles.messageCard}>
+            <Feather name="inbox" size={20} color={Colors.gray[500]} />
+            <Text style={styles.messageText}>
+              Aucun objectif pour le moment. Créez votre premier projet d&apos;épargne.
+            </Text>
+          </View>
+        ) : null}
+
         {goals.map((goal) => {
-          const pct = Math.round((goal.saved / goal.target) * 100);
+          const pct =
+            goal.target > 0 ? Math.min(100, Math.round((goal.saved / goal.target) * 100)) : 0;
           return (
             <AnimatedPressable
               key={goal.id}
               style={styles.goalCard}
-              onPress={() => router.push('/savings-detail')} >
+              onPress={() =>
+                router.push({ pathname: '/savings-detail', params: { id: goal.id } })
+              }
+            >
               <View style={styles.goalTop}>
                 <View style={styles.goalLeft}>
                   <View style={styles.goalIcon}>
@@ -267,4 +289,25 @@ const styles = StyleSheet.create({
   },
   newProjectTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900], marginBottom: 2 },
   newProjectSub: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
+  loader: { marginVertical: Theme.spacing.xl },
+  messageCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    ...Theme.shadow.soft,
+  },
+  messageText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[600],
+    lineHeight: 20,
+  },
 });

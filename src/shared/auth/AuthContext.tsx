@@ -10,6 +10,7 @@ import {
 import type { AuthUser } from './types';
 import { parseAuthUser } from './types';
 import { loadUserFromApi, refreshAccessToken } from './authApi';
+import { loadCurrentUser, setSessionExpiredHandler } from './fetchWithAuth';
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from './tokenStorage';
 
 type SignInPayload = {
@@ -73,6 +74,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void hydrate();
   }, [hydrate]);
 
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      setUser(null);
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
+
   const signIn = useCallback(async ({ access, refresh, user: rawUser }: SignInPayload) => {
     await saveTokens(access, refresh);
     const parsed = parseAuthUser(rawUser);
@@ -90,9 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const access = await getAccessToken();
-    if (!access) return;
-    const me = await loadUserFromApi(access);
+    const me = await loadCurrentUser();
     if (me) setUser(me);
   }, []);
 

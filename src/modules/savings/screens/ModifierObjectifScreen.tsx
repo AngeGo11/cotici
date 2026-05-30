@@ -1,52 +1,134 @@
-import { useState } from 'react';
-import { 
+import { useEffect, useState } from 'react';
+import {
   View,
   Text,
   TextInput,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { updateSavingsGoal } from '@/shared/api';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { useSavingsDetail } from '@/modules/savings/hooks/useSavingsDetail';
 
-const categories = ['Voyage', 'Projet', 'Mariage', 'Éducation', 'Santé', 'Autre'];
+const categories = ['Voyage', 'Projet personnel', 'Mariage', 'Éducation', 'Santé', 'Autre'] as const;
+type Category = (typeof categories)[number];
 
-/** Valeurs initiales alignées sur l’objectif « Nouveau Projet » (écran détail) */
-const INITIAL = {
-  goalName: 'Nouveau Projet',
-  targetAmount: '500000',
-  duration: '6',
-  category: 'Projet',
-};
+function parsePositiveInt(value: string): number | null {
+  const n = Number(value.replace(/\s/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n);
+}
+
+function categoryFromDetail(raw: string): { category: Category; otherCategory: string } {
+  if ((categories as readonly string[]).includes(raw)) {
+    return { category: raw as Category, otherCategory: '' };
+  }
+  if (raw) {
+    return { category: 'Autre', otherCategory: raw };
+  }
+  return { category: 'Projet personnel', otherCategory: '' };
+}
 
 export default function ModifierObjectifScreen() {
   const router = useRouter();
-  const [goalName, setGoalName] = useState(INITIAL.goalName);
-  const [targetAmount, setTargetAmount] = useState(INITIAL.targetAmount);
-  const [duration, setDuration] = useState(INITIAL.duration);
-  const [category, setCategory] = useState(INITIAL.category);
-  const [otherCategory, setOtherCategory] = useState('');
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { detail, loading, error: loadError } = useSavingsDetail(id);
 
+  const [goalName, setGoalName] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [duration, setDuration] = useState('');
+  const [category, setCategory] = useState<Category | null>(null);
+  const [otherCategory, setOtherCategory] = useState('');
+  const [formReady, setFormReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    setFormReady(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!detail || formReady) return;
+    const mapped = categoryFromDetail(detail.category);
+    setGoalName(detail.name);
+    setTargetAmount(String(detail.target));
+    setDuration(String(detail.durationMonths));
+    setCategory(mapped.category);
+    setOtherCategory(mapped.otherCategory);
+    setFormReady(true);
+  }, [detail, formReady]);
+
+  const montantCible = parsePositiveInt(targetAmount);
+  const dureeMois = parsePositiveInt(duration);
   const monthlyAmount =
-    targetAmount && duration
-      ? Math.ceil(Number(targetAmount.replace(/\s/g, '')) / Number(duration))
-      : 0;
+    montantCible && dureeMois ? Math.ceil(montantCible / dureeMois) : 0;
 
   const canSave =
-    goalName.trim().length > 0 &&
-    Number(targetAmount.replace(/\s/g, '')) > 0 &&
-    Number(duration) > 0 &&
-    (category !== 'Autre' || otherCategory.trim().length > 0);
+    Boolean(goalName.trim()) &&
+    montantCible !== null &&
+    dureeMois !== null &&
+    category !== null &&
+    (category !== 'Autre' || Boolean(otherCategory.trim())) &&
+    (detail === null || montantCible >= detail.saved) &&
+    !isSubmitting &&
+    formReady;
 
-  const onSave = () => {
-    if (!canSave) return;
+  const onSave = async () => {
+    if (!canSave || !category || !id || montantCible === null || dureeMois === null) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    const result = await updateSavingsGoal({
+      id,
+      nom_projet: goalName.trim(),
+      montant_cible: montantCible,
+      duree: dureeMois,
+      categorie: category,
+      ...(category === 'Autre' ? { value_categorie: otherCategory.trim() } : {}),
+    });
+
+    if (!result.ok) {
+      setErrorMessage(result.detail);
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
     router.back();
   };
+
+  if (loading || !formReady) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError || !detail) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{loadError ?? 'Objectif introuvable.'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -62,12 +144,12 @@ export default function ModifierObjectifScreen() {
             <Feather name="edit-2" size={24} color={Colors.success} />
           </View>
           <View>
-            <Text style={styles.title}>Modifier l'objectif</Text>
+            <Text style={styles.title}>Modifier l&apos;objectif</Text>
             <Text style={styles.subtitle}>Ajustez le nom, le montant ou la durée</Text>
           </View>
         </View>
 
-        <Text style={styles.label}>Nom de l'objectif</Text>
+        <Text style={styles.label}>Nom de l&apos;objectif</Text>
         <TextInput
           style={styles.input}
           value={goalName}
@@ -88,6 +170,11 @@ export default function ModifierObjectifScreen() {
           />
           <Text style={styles.unit}>FCFA</Text>
         </View>
+        {detail.saved > 0 && montantCible !== null && montantCible < detail.saved ? (
+          <Text style={styles.fieldHint}>
+            Minimum : {detail.saved.toLocaleString('fr-FR')} F (déjà épargné)
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>Durée (en mois)</Text>
         <TextInput
@@ -124,7 +211,6 @@ export default function ModifierObjectifScreen() {
               onChangeText={setOtherCategory}
               placeholder="Ex : Achat véhicule, rénovation…"
               placeholderTextColor={Colors.gray[400]}
-              autoFocus
             />
           </>
         )}
@@ -141,20 +227,30 @@ export default function ModifierObjectifScreen() {
               </View>
             </View>
             <Text style={styles.previewSub}>
-              Pour atteindre {Number(targetAmount.replace(/\s/g, '')).toLocaleString('fr-FR')} F en{' '}
-              {duration} mois
+              Pour atteindre {montantCible!.toLocaleString('fr-FR')} F en {dureeMois} mois
             </Text>
+          </View>
+        ) : null}
+
+        {errorMessage ? (
+          <View style={styles.errorCard}>
+            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
 
         <AnimatedPressable
           style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-          onPress={onSave}
+          onPress={() => void onSave()}
           disabled={!canSave}
         >
-          <Text style={[styles.saveButtonText, !canSave && { color: Colors.gray[400] }]}>
-            Enregistrer les modifications
-          </Text>
+          {isSubmitting ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Text style={[styles.saveButtonText, !canSave && { color: Colors.gray[400] }]}>
+              Enregistrer les modifications
+            </Text>
+          )}
         </AnimatedPressable>
 
         <Text style={styles.footerNote}>Les montants déjà épargnés ne sont pas modifiés</Text>
@@ -166,6 +262,7 @@ export default function ModifierObjectifScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Theme.spacing.page },
   header: { paddingHorizontal: Theme.spacing.page, paddingVertical: 12 },
   backButton: {
     width: 40,
@@ -192,6 +289,14 @@ const styles = StyleSheet.create({
     color: Colors.gray[700],
     paddingHorizontal: Theme.spacing.page,
     marginBottom: 8,
+  },
+  fieldHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    color: Colors.danger,
+    paddingHorizontal: Theme.spacing.page,
+    marginTop: -8,
+    marginBottom: 16,
   },
   input: {
     marginHorizontal: Theme.spacing.page,
@@ -262,6 +367,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewSub: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: withOpacity(Colors.accent, 0.1),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.accent, 0.25),
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[700],
+    lineHeight: 20,
+    textAlign: 'center',
+  },
   saveButton: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Colors.success,

@@ -18,7 +18,6 @@ import { PaymentProviderMark } from '@/components/PaymentProviderMark';
 import type { PaymentProvider } from '@/types';
 import { parseBalance, submitWalletWithdrawal } from '@/shared/api';
 import { formatMonthlyFlow, useAuth } from '@/shared/auth';
-import { getAccessToken } from '@/shared/auth/tokenStorage';
 
 const providers = [
   { id: 'orange' as const, name: 'Orange Money' },
@@ -76,14 +75,7 @@ export default function RetraitScreen() {
     setIsSubmitting(true);
     setErrorMessage('');
 
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      setErrorMessage('Session expirée. Reconnectez-vous.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    const result = await submitWalletWithdrawal(accessToken, {
+    const result = await submitWalletWithdrawal({
       amount: amountNum,
       provider: selectedProvider,
     });

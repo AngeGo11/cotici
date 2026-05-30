@@ -1,4 +1,5 @@
 from apps.wallet.models import Wallet
+from apps.wallet.services.account_summary import get_epargne_totale, get_tontine_cotisations_mois
 from apps.wallet.services.monthly_stats import get_monthly_entrees_sorties
 
 
@@ -16,4 +17,6 @@ def build_user_wallet_payload(user) -> dict:
         "solde_courant": wallet.solde_courant,
         "entrees_ce_mois": entrees,
         "sorties_ce_mois": sorties,
+        "epargne_totale": get_epargne_totale(user),
+        "tontine_cotisations_mois": get_tontine_cotisations_mois(user),
     }
