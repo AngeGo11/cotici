@@ -16,11 +16,14 @@ export {
   fetchSavingsDetail,
   updateSavingsGoal,
   depositToSavings,
+  fetchSavingsTransactions,
   type CreateSavingsParams,
   type CreateSavingsResponse,
   type SavingsGoal,
   type SavingsGoalsResponse,
   type UpdateSavingsParams,
   type DepositToSavingsParams,
+  type SavingsTransaction,
+  type SavingsTransactionsResponse,
 } from './savingsApi';
-export { mapTransactionForUi } from './mapWalletTransaction';
+export { mapTransactionForUi, mapSavingsDepositForUi } from './mapWalletTransaction';

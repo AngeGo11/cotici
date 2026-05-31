@@ -41,3 +41,21 @@ export function mapTransactionForUi(tx: WalletTransaction, index: number): Activ
     accountHint: tx.numero_telephone || undefined,
   };
 }
+
+export function mapSavingsDepositForUi(tx: WalletTransaction, index: number): ActivityDetail {
+  const amount = Number(tx.montant_transaction);
+  const d = new Date(tx.date_transaction);
+
+  return {
+    id: tx.ref_transaction || String(index),
+    type: 'Versement épargne',
+    amount,
+    date: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    reference: tx.ref_transaction,
+    status: STATUS_LABELS[tx.statut_transaction] ?? 'En cours',
+    method: METHOD_LABELS[tx.mode_de_paiement] ?? tx.mode_de_paiement,
+    accountHint: tx.numero_telephone || undefined,
+    note: 'Versement effectué depuis votre solde COTICI vers cet objectif.',
+  };
+}

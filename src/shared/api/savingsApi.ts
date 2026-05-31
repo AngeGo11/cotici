@@ -228,3 +228,47 @@ export async function depositToSavings(
   }
   return { ok: true, data: body };
 }
+
+export type SavingsTransaction = {
+  ref_transaction: string;
+  montant_transaction: string;
+  numero_telephone?: string;
+  type_transaction: string;
+  statut_transaction: string;
+  mode_de_paiement: string;
+  date_transaction: string;
+};
+
+export type SavingsTransactionsResponse = {
+  count: number;
+  results: SavingsTransaction[];
+};
+
+export async function fetchSavingsTransactions(
+  goalId: string | number,
+): Promise<{ ok: true; data: SavingsTransactionsResponse } | { ok: false; detail: string }> {
+  const id = String(goalId).trim();
+  if (!id) {
+    return { ok: false, detail: 'Objectif introuvable.' };
+  }
+
+  const auth = await requestWithAuth(
+    `/api/savings/transactions/?id=${encodeURIComponent(id)}`,
+    { method: 'GET' },
+  );
+  if (!auth.ok) return auth;
+
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return {
+      ok: false,
+      detail: extractErrorDetail(body, 'Impossible de charger l’historique.'),
+    };
+  }
+
+  const data = body as SavingsTransactionsResponse;
+  if (!Array.isArray(data?.results)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
+}

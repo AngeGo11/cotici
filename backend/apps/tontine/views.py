@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from apps.utils.utilitaires import _normalize_phone, _generate_qr_payload, _parse_positive_int, _parse_positive_decimal
 
 from apps.tontine.models import (
     Invitations,
@@ -25,37 +26,6 @@ from apps.tontine.permissions import IsTontineAdmin, user_is_tontine_admin
 def health(request):
     return JsonResponse({"module": "tontine", "status": "ok"})
 
-
-def _normalize_phone(value: str) -> str:
-    digits = re.sub(r"\D", "", value or "")
-    return digits[-15:] if digits else ""
-
-
-def _generate_qr_payload(tontine_id: int) -> str:
-    """Jeton opaque pour le champ qr_code (max 500 caractères)."""
-    suffix = secrets.token_urlsafe(48)
-    raw = f"cotici:tontine:{tontine_id}:{suffix}"
-    return raw[:500]
-
-
-def _parse_positive_int(value):
-    if value in (None, ""):
-        return None
-    try:
-        n = int(value)
-    except (TypeError, ValueError):
-        return None
-    return n if n > 0 else None
-
-
-def _parse_positive_decimal(value):
-    if value in (None, ""):
-        return None
-    try:
-        amount = Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return None
-    return amount if amount > 0 else None
 
 
 def _get_regle(tontine: Tontine):

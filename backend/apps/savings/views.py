@@ -239,3 +239,43 @@ def update_savings(request):
 
     return Response(_serialize_epargne(epargne))
 
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_transactions_for_savings(request):
+    goal_id = _parse_positive_int(request.query_params.get("id"))
+    if goal_id is None:
+        return Response(
+            {"detail": "Identifiant d'objectif invalide."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    epargne = EpargnePersonnelle.objects.filter(hote=request.user, id=goal_id).first()
+    if epargne is None:
+        return Response(
+            {"detail": "Objectif introuvable."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    transactions = (
+        Transaction.objects.filter(
+            epargne=epargne,
+            type_transaction=Transaction.TYPE_TRANSACTION.VERSEMENT_EPARGNE_PERSONNELLE,
+        )
+        .select_related("wallet__user")
+        .order_by("-date_transaction")
+    )
+    data = [
+        {
+            "ref_transaction": t.ref_transaction,
+            "montant_transaction": str(t.montant_transaction),
+            "numero_telephone": getattr(t.wallet.user, "numero_telephone", "") or "",
+            "type_transaction": t.type_transaction,
+            "statut_transaction": t.statut_transaction,
+            "mode_de_paiement": t.mode_de_paiement,
+            "date_transaction": t.date_transaction.isoformat(),
+        }
+        for t in transactions
+    ]
+    return Response({"count": len(data), "results": data})

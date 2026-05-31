@@ -13,15 +13,12 @@ import { Svg, Circle } from 'react-native-svg';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { SAVINGS_CONTRIBUTIONS } from '@/data/savingsContributions';
 import { useSavingsDetail } from '@/modules/savings/hooks/useSavingsDetail';
 
 const size = 200;
 const strokeWidth = 14;
 const radius = (size - strokeWidth) / 2;
 const circumference = 2 * Math.PI * radius;
-
-const contributionsPreview = SAVINGS_CONTRIBUTIONS.slice(0, 3);
 
 export default function SavingsDetailScreen() {
   const router = useRouter();
@@ -171,23 +168,7 @@ export default function SavingsDetailScreen() {
           </AnimatedPressable>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Contributions récentes</Text>
-        {contributionsPreview.map((c) => (
-          <View key={c.id} style={styles.contributionItem}>
-            <View style={styles.contribLeft}>
-              <View style={styles.contribIcon}>
-                <Feather name="arrow-down-left" size={18} color={Colors.success} />
-              </View>
-              <View>
-                <Text style={styles.contributionType}>{c.label}</Text>
-                <Text style={styles.contributionDate}>{c.date}</Text>
-              </View>
-            </View>
-            <Text style={styles.contributionAmount}>+{c.amount.toLocaleString('fr-FR')} F</Text>
-          </View>
-        ))}
-
-        <View style={{ height: 40 }} />
+        
       </ScrollView>
     </SafeAreaView>
   );

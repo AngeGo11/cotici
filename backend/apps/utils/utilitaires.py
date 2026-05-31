@@ -11,6 +11,16 @@ def _parse_amount(value):
         return None
 
 
+def _parse_positive_decimal(value):
+    if value in (None, ""):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return amount if amount > 0 else None
+
+
 def _resolve_payment_mode(raw):
     if raw is None or str(raw).strip() == "":
         return Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI
@@ -37,3 +47,17 @@ def _parse_positive_int(value):
     except (TypeError, ValueError):
         return None
     return n if n > 0 else None
+
+
+
+
+def _normalize_phone(value: str) -> str:
+    digits = re.sub(r"\D", "", value or "")
+    return digits[-15:] if digits else ""
+
+
+def _generate_qr_payload(tontine_id: int) -> str:
+    """Jeton opaque pour le champ qr_code (max 500 caractères)."""
+    suffix = secrets.token_urlsafe(48)
+    raw = f"cotici:tontine:{tontine_id}:{suffix}"
+    return raw[:500]
