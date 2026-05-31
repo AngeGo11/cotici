@@ -201,6 +201,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url.startsWith("/api/savings/transactions")) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/savings/transactions/${query}`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "PATCH" && req.url === "/api/savings/update/") {
     await proxyToDjango(req, res, {
       method: "PATCH",
