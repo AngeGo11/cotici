@@ -1,9 +1,14 @@
-import { 
+import { useCallback, useRef, useState } from 'react';
+import type { ComponentProps } from 'react';
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,14 +25,170 @@ const settingsOptions = [
   { id: 'terms', label: "Conditions d'utilisation", description: 'Politique de confidentialité', icon: 'file-text' as const, color: Colors.gray[600] },
 ];
 
+const CARDS_PER_PAGE = 3;
+
+type ActivityStat = {
+  id: string;
+  value: string;
+  label: string;
+  icon: ComponentProps<typeof Feather>['name'];
+  borderColor: string;
+  iconColor: string;
+  valueColor: string;
+};
+
+type ActivityPage = {
+  theme: 'tontines' | 'epargnes';
+  title: string;
+  cards: ActivityStat[];
+};
+
+const tontineActivityStats: ActivityStat[] = [
+  {
+    id: 'tontines-created',
+    value: '3',
+    label: 'Créées',
+    icon: 'users',
+    borderColor: Colors.brand,
+    iconColor: Colors.brand,
+    valueColor: Colors.brand,
+  },
+  {
+    id: 'tontines-joined',
+    value: '2',
+    label: 'Rejointes',
+    icon: 'user-plus',
+    borderColor: Colors.brand,
+    iconColor: Colors.brand,
+    valueColor: Colors.brand,
+  },
+  {
+    id: 'tontines-archived',
+    value: '2',
+    label: 'Archivées',
+    icon: 'archive',
+    borderColor: Colors.brand,
+    iconColor: Colors.brand,
+    valueColor: Colors.brand,
+  },
+  {
+    id: 'tontines-deleted',
+    value: '2',
+    label: 'Supprimées',
+    icon: 'trash-2',
+    borderColor: Colors.brand,
+    iconColor: Colors.brand,
+    valueColor: Colors.brand,
+  },
+];
+
+const savingsActivityStats: ActivityStat[] = [
+  {
+    id: 'savings-goals',
+    value: '2',
+    label: "Objectifs actifs",
+    icon: 'target',
+    borderColor: Colors.success,
+    iconColor: Colors.success,
+    valueColor: Colors.success,
+  },
+  {
+    id: 'savings-archived',
+    value: '2',
+    label: 'Archivées',
+    icon: 'archive',
+    borderColor: Colors.success,
+    iconColor: Colors.success,
+    valueColor: Colors.success,
+  },
+  {
+    id: 'savings-deleted',
+    value: '2',
+    label: 'Supprimées',
+    icon: 'trash-2',
+    borderColor: Colors.success,
+    iconColor: Colors.success,
+    valueColor: Colors.success,
+  },
+];
+
+function chunkStats(stats: ActivityStat[], perPage: number): ActivityStat[][] {
+  const pages: ActivityStat[][] = [];
+  for (let i = 0; i < stats.length; i += perPage) {
+    pages.push(stats.slice(i, i + perPage));
+  }
+  return pages;
+}
+
+function buildActivityPages(): ActivityPage[] {
+  const pages: ActivityPage[] = [];
+
+  const tontineChunks = chunkStats(tontineActivityStats, CARDS_PER_PAGE);
+  tontineChunks.forEach((cards, index) => {
+    pages.push({
+      theme: 'tontines',
+      title:
+        tontineChunks.length > 1
+          ? `Tontines (${index + 1}/${tontineChunks.length})`
+          : 'Tontines',
+      cards,
+    });
+  });
+
+  const savingsChunks = chunkStats(savingsActivityStats, CARDS_PER_PAGE);
+  savingsChunks.forEach((cards, index) => {
+    pages.push({
+      theme: 'epargnes',
+      title:
+        savingsChunks.length > 1
+          ? `Épargne (${index + 1}/${savingsChunks.length})`
+          : 'Épargne',
+      cards,
+    });
+  });
+
+  return pages;
+}
+
+const activityPagesStatic = buildActivityPages();
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const activityScrollRef = useRef<ScrollView>(null);
+  const [activityPageIndex, setActivityPageIndex] = useState(0);
   const { user } = useAuth();
   const displayName = getDisplayFullName(user) || 'Membre COTICI';
   const phoneLine = user?.numero_telephone ?? '—';
   const dateJoined = user?.date_joined ?? '—';
   const initials = getUserInitials(user);
   const solde = formatFcfaDots(user?.solde_courant);
+
+  const activityPages = activityPagesStatic;
+  const currentActivityPage = activityPages[activityPageIndex];
+
+  const canScrollActivityForward = activityPageIndex < activityPages.length - 1;
+  const canScrollActivityBack = activityPageIndex > 0;
+
+  const handleActivityScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const page = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+      setActivityPageIndex(page);
+    },
+    [screenWidth],
+  );
+
+  const scrollActivityForward = useCallback(() => {
+    const nextPage = Math.min(activityPageIndex + 1, activityPages.length - 1);
+    activityScrollRef.current?.scrollTo({ x: nextPage * screenWidth, animated: true });
+    setActivityPageIndex(nextPage);
+  }, [activityPageIndex, activityPages.length, screenWidth]);
+
+  const scrollActivityBack = useCallback(() => {
+    const prevPage = Math.max(activityPageIndex - 1, 0);
+    activityScrollRef.current?.scrollTo({ x: prevPage * screenWidth, animated: true });
+    setActivityPageIndex(prevPage);
+  }, [activityPageIndex, screenWidth]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -63,33 +224,96 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Activité</Text>
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderTopColor: Colors.brand }]}>
-            <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.brand, 0.12) }]}>
-              <Feather name="users" size={20} color={Colors.brand} />
-            </View>
-            <Text style={[styles.statValue, { color: Colors.brand }]}>3</Text>
-            <Text style={styles.statLabel}>Tontines que vous avez créées</Text>
+        <View style={styles.activityBlock}>
+          <View style={styles.activityBlockHeader}>
+            <Text style={styles.sectionEyebrow}>Activité</Text>
+            {activityPages.length > 0 ? (
+              <Text style={styles.activityBlockHint}>
+                {currentActivityPage?.title ?? 'Activité'}
+                {activityPages.length > 1
+                  ? ` · ${activityPageIndex + 1}/${activityPages.length}`
+                  : ''}
+              </Text>
+            ) : null}
           </View>
-          <View style={[styles.statCard, { borderTopColor: Colors.success }]}>
-            <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
-              <Feather name="target" size={20} color={Colors.success} />
-            </View>
-            <Text style={[styles.statValue, { color: Colors.success }]}>2</Text>
-            <Text style={styles.statLabel}>Vos objectifs d'épargne</Text>
+          <View style={styles.statCarouselWrap}>
+            <ScrollView
+              ref={activityScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled
+              decelerationRate="fast"
+              snapToInterval={screenWidth}
+              snapToAlignment="start"
+              disableIntervalMomentum
+              onMomentumScrollEnd={handleActivityScrollEnd}
+              onScrollEndDrag={handleActivityScrollEnd}
+              style={styles.statCarousel}
+            >
+              {activityPages.map((page, pageIndex) => (
+                <View
+                  key={`activity-page-${pageIndex}`}
+                  style={[
+                    styles.statCarouselPage,
+                    { width: screenWidth },
+                    pageIndex === 0 &&
+                      pageIndex < activityPages.length - 1 &&
+                      styles.statCarouselPageWithChevronRight,
+                    pageIndex > 0 && styles.statCarouselPageWithChevronLeft,
+                  ]}
+                >
+                  {page.cards.map((stat) => (
+                    <View
+                      key={stat.id}
+                      style={[styles.statCard, { borderTopColor: stat.borderColor }]}
+                    >
+                      <View
+                        style={[
+                          styles.statIconBg,
+                          { backgroundColor: withOpacity(stat.iconColor, 0.12) },
+                        ]}
+                      >
+                        <Feather name={stat.icon} size={18} color={stat.iconColor} />
+                      </View>
+                      <Text style={[styles.statValue, { color: stat.valueColor }]}>
+                        {stat.value}
+                      </Text>
+                      <Text style={styles.statLabel} numberOfLines={2}>
+                        {stat.label}
+                      </Text>
+                    </View>
+                  ))}
+                  {Array.from({ length: CARDS_PER_PAGE - page.cards.length }).map((_, i) => (
+                    <View key={`activity-slot-${pageIndex}-${i}`} style={styles.statCardSlot} />
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+            {canScrollActivityBack ? (
+              <AnimatedPressable
+                style={[styles.statCarouselChevron, styles.statCarouselChevronLeft]}
+                onPress={scrollActivityBack}
+                accessibilityRole="button"
+                accessibilityLabel="Voir les indicateurs précédents"
+              >
+                <Feather name="chevron-left" size={18} color={Colors.gray[700]} />
+              </AnimatedPressable>
+            ) : null}
+            {canScrollActivityForward ? (
+              <AnimatedPressable
+                style={styles.statCarouselChevron}
+                onPress={scrollActivityForward}
+                accessibilityRole="button"
+                accessibilityLabel="Voir les indicateurs suivants"
+              >
+                <Feather name="chevron-right" size={18} color={Colors.gray[700]} />
+              </AnimatedPressable>
+            ) : null}
           </View>
-          <View style={[styles.statCard, { borderTopColor: Colors.success }]}>
-            <View style={[styles.statIconBg, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
-              <Feather name="user-plus" size={20} color={Colors.success} />
-            </View>
-            <Text style={[styles.statValue, { color: Colors.success }]}>2</Text>
-            <Text style={styles.statLabel}>Tontines que vous avez rejointes</Text>
-          </View>
-          
         </View>
 
-        <Text style={styles.sectionEyebrow}>Paramètres</Text>
+        <Text style={[styles.sectionEyebrow, styles.sectionEyebrowStandalone]}>Paramètres</Text>
         <View style={styles.settingsBlock}>
           {settingsOptions.map((option) => (
             <AnimatedPressable
@@ -180,32 +404,91 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,
     color: Colors.gray[500],
-    paddingHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.md,
     letterSpacing: 0.2,
   },
-  statsRow: { flexDirection: 'row', gap: Theme.spacing.md, paddingHorizontal: Theme.spacing.page, marginBottom: Theme.spacing.xl },
+  sectionEyebrowStandalone: {
+    paddingHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
+  },
+  activityBlock: {
+    gap: Theme.spacing.sm,
+    marginBottom: Theme.spacing.xl,
+  },
+  activityBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
+  },
+  activityBlockHint: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 12,
+    color: Colors.gray[400],
+  },
+  statCarouselWrap: {
+    position: 'relative',
+  },
+  statCarousel: {
+    overflow: 'hidden',
+  },
+  statCarouselPage: {
+    flexDirection: 'row',
+    paddingHorizontal: Theme.spacing.page,
+    gap: 10,
+  },
+  statCarouselPageWithChevronRight: {
+    paddingRight: Theme.spacing.page + 30,
+  },
+  statCarouselPageWithChevronLeft: {
+    paddingLeft: Theme.spacing.page + 30,
+  },
+  statCarouselChevron: {
+    position: 'absolute',
+    right: Theme.spacing.page - 6,
+    top: '50%',
+    marginTop: -18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Theme.shadow.soft,
+  },
+  statCarouselChevronLeft: {
+    right: undefined,
+    left: Theme.spacing.page - 6,
+  },
   statCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Theme.screen.surface,
     borderRadius: Theme.radius.md,
-    padding: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.gray[100],
     borderTopWidth: 3,
     ...Theme.shadow.card,
   },
+  statCardSlot: {
+    flex: 1,
+    minWidth: 0,
+  },
   statIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  statValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 22, marginBottom: 2 },
-  statLabel: { fontFamily: Fonts.outfit.regular, fontSize: 11, color: Colors.gray[600], textAlign: 'center' },
+  statValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 20, marginBottom: 2 },
+  statLabel: { fontFamily: Fonts.outfit.regular, fontSize: 10, color: Colors.gray[600], textAlign: 'center' },
   settingsBlock: { paddingHorizontal: Theme.spacing.page, marginBottom: Theme.spacing.lg },
   settingsItem: {
     flexDirection: 'row',

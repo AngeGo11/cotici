@@ -1,6 +1,8 @@
 import { parseBalance } from './walletApi';
 import { requestWithAuth } from './authFetch';
 
+export type SavingsEtat = 'ACTIF' | 'ARCHIVÉ' | 'SUPPRIMÉ';
+
 export type SavingsGoal = {
   id: number;
   nom_projet: string;
@@ -9,6 +11,10 @@ export type SavingsGoal = {
   date_creation: string;
   categorie: string;
   duree: number;
+  etat: SavingsEtat;
+  objectif_atteint: boolean;
+  date_archivage: string | null;
+  date_suppression: string | null;
 };
 
 export type SavingsGoalsResponse = {
@@ -47,12 +53,22 @@ function extractErrorDetail(body: unknown, fallback: string): string {
 export function savingsGoalToUi(goal: SavingsGoal) {
   const saved = parseBalance(goal.montant_courant);
   const target = goal.objectif_cotisation;
+  const goalCompleted = goal.objectif_atteint === true;
+  const withdrawn = goalCompleted && saved === 0;
+  const percentage = withdrawn
+    ? 100
+    : target > 0
+      ? Math.min(100, Math.round((saved / target) * 100))
+      : 0;
   return {
     id: String(goal.id),
     name: goal.nom_projet,
     saved,
     target,
     icon: 'target' as const,
+    goalCompleted,
+    withdrawn,
+    percentage,
   };
 }
 
@@ -162,7 +178,8 @@ function isValidSavingsGoal(data: unknown): data is SavingsGoal {
     typeof goal.objectif_cotisation === 'number' &&
     typeof goal.montant_courant === 'string' &&
     typeof goal.date_creation === 'string' &&
-    typeof goal.duree === 'number'
+    typeof goal.duree === 'number' &&
+    typeof goal.etat === 'string'
   );
 }
 
@@ -271,4 +288,108 @@ export async function fetchSavingsTransactions(
     return { ok: false, detail: 'Réponse serveur invalide.' };
   }
   return { ok: true, data };
+}
+
+export type WithdrawFromSavingsResponse = SavingsGoal & {
+  ref_transaction: string;
+  montant_retire: string;
+};
+
+export async function withdrawFromSavings(
+  goalId: string | number,
+): Promise<
+  { ok: true; data: WithdrawFromSavingsResponse } | { ok: false; detail: string }
+> {
+  const id = String(goalId).trim();
+  if (!id) {
+    return { ok: false, detail: 'Objectif introuvable.' };
+  }
+
+  const auth = await requestWithAuth('/api/savings/withdraw/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: Number(id) }),
+  });
+  if (!auth.ok) return auth;
+
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return {
+      ok: false,
+      detail: extractErrorDetail(body, 'Impossible de retirer votre épargne. Réessayez.'),
+    };
+  }
+
+  if (!isValidSavingsGoal(body)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+
+  const data = body as WithdrawFromSavingsResponse;
+  if (typeof data.ref_transaction !== 'string') {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
+}
+
+export async function fetchArchivedSavingsGoals(): Promise<
+  { ok: true; data: SavingsGoalsResponse } | { ok: false; detail: string }
+> {
+  const auth = await requestWithAuth('/api/savings/archived/', { method: 'GET' });
+  if (!auth.ok) return auth;
+
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return {
+      ok: false,
+      detail: extractErrorDetail(body, 'Impossible de charger les objectifs archivés.'),
+    };
+  }
+  const data = body as SavingsGoalsResponse;
+  if (!Array.isArray(data?.results)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
+}
+
+async function postSavingsGoalAction(
+  path: string,
+  goalId: string | number,
+  fallbackError: string,
+): Promise<{ ok: true; data: SavingsGoal } | { ok: false; detail: string }> {
+  const id = String(goalId).trim();
+  if (!id) {
+    return { ok: false, detail: 'Objectif introuvable.' };
+  }
+
+  const auth = await requestWithAuth(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: Number(id) }),
+  });
+  if (!auth.ok) return auth;
+
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, fallbackError) };
+  }
+  if (!isValidSavingsGoal(body)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data: body };
+}
+
+export function archiveSavingsGoal(goalId: string | number) {
+  return postSavingsGoalAction(
+    '/api/savings/archive/',
+    goalId,
+    'Impossible d’archiver cet objectif.',
+  );
+}
+
+export function deleteSavingsGoal(goalId: string | number) {
+  return postSavingsGoalAction(
+    '/api/savings/delete/',
+    goalId,
+    'Impossible de supprimer cet objectif.',
+  );
 }

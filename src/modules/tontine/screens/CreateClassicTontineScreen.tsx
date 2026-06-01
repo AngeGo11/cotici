@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { 
+import { useMemo, useState } from 'react';
+import {
   View,
   Text,
   TextInput,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,17 +15,143 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import {
+  createTontine,
+  defineTontineRegles,
+  mapFrequencyToApi,
+  mapOrdreToApi,
+  mapPenaltyTypeToApi,
+} from '@/shared/api';
 
 export default function CreateClassicTontineScreen() {
   const router = useRouter();
   const [groupName, setGroupName] = useState('');
-  const [monthlyAmount, setMonthlyAmount] = useState('');
+  const [maxMembers, setMaxMembers] = useState('');
+  const [cotisationGoal, setCotisationGoal] = useState('');
+  const [participantAmount, setParticipantAmount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('monthly');
   const [customFrequencyDays, setCustomFrequencyDays] = useState('');
   const [rotationLogic, setRotationLogic] = useState<'random' | 'admin'>('random');
   const [penaltiesEnabled, setPenaltiesEnabled] = useState(true);
+  const [description, setDescription] = useState('');
   const [penaltyType, setPenaltyType] = useState<'retard' | 'absence'>('retard');
   const [penaltyAmount, setPenaltyAmount] = useState('2000');
+
+  const cotisationGoalNum = useMemo(
+    () => parseInt(cotisationGoal.replace(/\s/g, ''), 10),
+    [cotisationGoal],
+  );
+  const participantAmountNum = useMemo(
+    () => parseInt(participantAmount.replace(/\s/g, ''), 10),
+    [participantAmount],
+  );
+  const maxMembersNum = useMemo(
+    () => parseInt(maxMembers.replace(/\s/g, ''), 10),
+    [maxMembers],
+  );
+  const potPerTour =
+    Number.isFinite(participantAmountNum) &&
+    participantAmountNum > 0 &&
+    Number.isFinite(maxMembersNum) &&
+    maxMembersNum >= 2
+      ? participantAmountNum * maxMembersNum
+      : null;
+
+  const formatAmountInput = (text: string): string => {
+    const digits = text.replace(/\D/g, '');
+    if (!digits) return '';
+    return parseInt(digits, 10).toLocaleString('fr-FR');
+  };
+
+  const suggestedObjectif =
+    potPerTour !== null && Number.isFinite(maxMembersNum) && maxMembersNum >= 2
+      ? potPerTour * maxMembersNum
+      : null;
+
+  const computedTours =
+    potPerTour !== null &&
+    cotisationGoalNum > 0 &&
+    Number.isFinite(cotisationGoalNum) &&
+    Number.isFinite(maxMembersNum) &&
+    maxMembersNum >= 2
+      ? Math.max(1, Math.ceil(cotisationGoalNum / potPerTour))
+      : null;
+
+  const handleCreate = () => {
+    const nom = groupName.trim();
+    const objectifTotal = cotisationGoalNum;
+    const montantParticipant = participantAmountNum;
+    const max = maxMembersNum;
+    if (!nom) {
+      Alert.alert('Champ requis', 'Indiquez le nom du groupe.');
+      return;
+    }
+    if (!Number.isFinite(objectifTotal) || objectifTotal <= 0) {
+      Alert.alert('Objectif invalide', "Indiquez l'objectif de cotisation (montant total).");
+      return;
+    }
+    if (!Number.isFinite(montantParticipant) || montantParticipant <= 0) {
+      Alert.alert('Montant invalide', 'Indiquez le montant par participant.');
+      return;
+    }
+    if (!Number.isFinite(max) || max < 2) {
+      Alert.alert('Participants', 'Le groupe doit compter au moins 2 membres.');
+      return;
+    }
+    if (frequency === 'custom') {
+      const days = parseInt(customFrequencyDays.replace(/\s/g, ''), 10);
+      if (!Number.isFinite(days) || days <= 0) {
+        Alert.alert('Fréquence', 'Précisez la fréquence personnalisée en jours.');
+        return;
+      }
+    }
+
+    void (async () => {
+      setSubmitting(true);
+      const created = await createTontine({
+        nom_projet: nom,
+        description: description.trim() || undefined,
+      });
+      if (!created.ok) {
+        Alert.alert('Erreur', created.detail);
+        setSubmitting(false);
+        return;
+      }
+
+      const reglesPayload: Parameters<typeof defineTontineRegles>[0] = {
+        tontine_id: created.data.id,
+        objectif_cotisation: objectifTotal,
+        montant_cotisation: montantParticipant,
+        nombre_max: max,
+        frequence: mapFrequencyToApi(frequency),
+        ordre_ramassage: mapOrdreToApi(rotationLogic),
+        penalite: penaltiesEnabled,
+      };
+      if (frequency === 'custom') {
+        reglesPayload.frequence_personnalise = parseInt(
+          customFrequencyDays.replace(/\s/g, ''),
+          10,
+        );
+      }
+      if (penaltiesEnabled) {
+        reglesPayload.type_penalite = mapPenaltyTypeToApi(penaltyType);
+        reglesPayload.montant_penalite = parseInt(penaltyAmount.replace(/\s/g, ''), 10) || 0;
+      }
+
+      const regles = await defineTontineRegles(reglesPayload);
+      setSubmitting(false);
+      if (!regles.ok) {
+        Alert.alert('Erreur', regles.detail);
+        return;
+      }
+
+      router.replace({
+        pathname: '/new-invitation',
+        params: { tontineId: String(created.data.id), tontineNom: nom },
+      });
+    })();
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -40,7 +168,7 @@ export default function CreateClassicTontineScreen() {
           </View>
           <Text style={styles.heroTitle}>Tontine de groupe</Text>
           <Text style={styles.heroSubtitle}>
-            Cotisez ensemble et définissez les règles de votre collectif avant d&apos;inviter les membres.
+            Cotisez ensemble et définissez les règles de votre collectif avant d'inviter les membres.
           </Text>
         </View>
 
@@ -58,18 +186,94 @@ export default function CreateClassicTontineScreen() {
         </View>
 
         <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Montant de la mise</Text>
+          <Text style={styles.label}>Description de la collecte</Text>
+          <TextInput
+            style={styles.input}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Ex : Financement de nos vacances de fin d'année"
+            placeholderTextColor={Colors.gray[400]}
+          />
+        </View>
+
+        <View style={styles.fieldBlock}>
+          <Text style={styles.label}>Nombre de participants</Text>
+          <TextInput
+            style={styles.input}
+            value={maxMembers}
+            onChangeText={setMaxMembers}
+            placeholder="Ex : 8"
+            placeholderTextColor={Colors.gray[400]}
+            keyboardType="number-pad"
+          />
+          <Text style={styles.helperText}>
+            Vous comptez parmi les participants (1 place pour vous).
+          </Text>
+        </View>
+
+        <View style={styles.fieldBlock}>
+          <Text style={styles.label}>Objectif de cotisation</Text>
           <View style={styles.inputWithUnit}>
             <TextInput
               style={styles.inputField}
-              value={monthlyAmount}
-              onChangeText={setMonthlyAmount}
+              value={cotisationGoal}
+              onChangeText={(text) => setCotisationGoal(formatAmountInput(text))}
+              placeholder="500 000"
+              placeholderTextColor={Colors.gray[400]}
+              keyboardType="number-pad"
+            />
+            <Text style={styles.unit}>FCFA</Text>
+          </View>
+          <Text style={styles.helperText}>
+            Montant total que le groupe vise à atteindre pour le projet.
+          </Text>
+          {suggestedObjectif !== null && !cotisationGoal.trim() ? (
+            <AnimatedPressable
+              style={styles.suggestLink}
+              onPress={() => setCotisationGoal(suggestedObjectif.toLocaleString('fr-FR'))}
+            >
+              <Text style={styles.suggestLinkText}>
+                Suggestion : {suggestedObjectif.toLocaleString('fr-FR')} FCFA ({maxMembersNum} tours × pot par tour)
+              </Text>
+            </AnimatedPressable>
+          ) : null}
+        </View>
+
+        <View style={styles.fieldBlock}>
+          <Text style={styles.label}>Montant par participant</Text>
+          <View style={styles.inputWithUnit}>
+            <TextInput
+              style={styles.inputField}
+              value={participantAmount}
+              onChangeText={(text) => setParticipantAmount(formatAmountInput(text))}
               placeholder="10 000"
               placeholderTextColor={Colors.gray[400]}
               keyboardType="number-pad"
             />
             <Text style={styles.unit}>FCFA</Text>
           </View>
+          <Text style={styles.helperText}>
+            Mise versée par chaque membre à chaque tour de cotisation.
+          </Text>
+          {potPerTour !== null ? (
+            <View style={styles.potSummary}>
+              <Feather name="info" size={14} color={Colors.brand} />
+              <Text style={styles.potSummaryText}>
+                Pot par tour :{' '}
+                <Text style={styles.potSummaryValue}>
+                  {potPerTour.toLocaleString('fr-FR')} FCFA
+                </Text>
+                {' '}
+                ({participantAmountNum.toLocaleString('fr-FR')} × {maxMembersNum} membres)
+              </Text>
+              {computedTours !== null ? (
+                <Text style={[styles.potSummaryText, { marginTop: 6 }]}>
+                  Nombre de tours (calculé) :{' '}
+                  <Text style={styles.potSummaryValue}>{computedTours}</Text>
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.fieldBlock}>
@@ -199,10 +403,18 @@ export default function CreateClassicTontineScreen() {
         </View>
 
         <AnimatedPressable
-          style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-tontine' } })} >
-          <Feather name="user-plus" size={20} color={Colors.white} />
-          <Text style={styles.createButtonText}>Créer et inviter</Text>
+          style={[styles.createButton, submitting && { opacity: 0.7 }]}
+          onPress={handleCreate}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Feather name="user-plus" size={20} color={Colors.white} />
+          )}
+          <Text style={styles.createButtonText}>
+            {submitting ? 'Création…' : 'Créer et inviter'}
+          </Text>
         </AnimatedPressable>
 
         <View style={{ height: 40 }} />
@@ -332,6 +544,39 @@ const styles = StyleSheet.create({
     color: Colors.gray[500],
     marginTop: 8,
     paddingHorizontal: Theme.spacing.page,
+  },
+  potSummary: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 10,
+    marginHorizontal: Theme.spacing.page,
+    padding: 12,
+    borderRadius: Theme.radius.md,
+    backgroundColor: withOpacity(Colors.brand, 0.08),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.15),
+  },
+  potSummaryText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[700],
+    lineHeight: 18,
+  },
+  potSummaryValue: {
+    fontFamily: Fonts.outfit.semiBold,
+    color: Colors.brand,
+  },
+  suggestLink: {
+    marginTop: 8,
+    marginHorizontal: Theme.spacing.page,
+    paddingVertical: 6,
+  },
+  suggestLinkText: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 12,
+    color: Colors.brand,
   },
   advancedCard: {
     marginHorizontal: Theme.spacing.page,

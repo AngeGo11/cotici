@@ -40,6 +40,14 @@ const configs: Record<string, { icon: keyof typeof Feather.glyphMap; color: stri
     buttonLabel: 'Voir mon épargne',
     buttonRoute: '/(tabs)/savings',
   },
+  'savings-withdraw': {
+    icon: 'arrow-down-left',
+    color: Colors.success,
+    title: 'Épargne retirée !',
+    subtitle: 'Le montant a été crédité sur votre solde COTICI disponible.',
+    buttonLabel: "Retour à l'accueil",
+    buttonRoute: '/(tabs)',
+  },
   'create-tontine': {
     icon: 'users',
     color: Colors.brand,

@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Alert, ActivityIndicator } from 'react-native';
 import {
   View,
   Text,
@@ -12,7 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { parseBalance } from '@/shared/api';
+import { cotiserTontine, parseBalance } from '@/shared/api';
 import { formatMonthlyFlow, useAuth } from '@/shared/auth';
 
 const FEE_F = 0;
@@ -27,7 +28,8 @@ const tabularAmount = { fontVariant: ['tabular-nums' as const] };
 
 export default function MakeDepositScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [paying, setPaying] = useState(false);
   const currentBalance = parseBalance(user?.solde_courant);
   const params = useLocalSearchParams<{
     tontineId?: string;
@@ -54,18 +56,28 @@ export default function MakeDepositScreen() {
   const shortfall = total - currentBalance;
   const balanceAfter = currentBalance - total;
 
-  const confirmParams = useMemo(
-    () => ({
-      pathname: '/success' as const,
-      params: {
-        type: 'payment',
-        ...(typeof params.tontineId === 'string' && params.tontineId
-          ? { tontineId: params.tontineId }
-          : {}),
-      },
-    }),
-    [params.tontineId],
-  );
+  const handleConfirm = () => {
+    if (!canPay || paying) return;
+    const tontineId = params.tontineId;
+    if (!tontineId) {
+      router.push({ pathname: '/success', params: { type: 'payment' } });
+      return;
+    }
+    void (async () => {
+      setPaying(true);
+      const result = await cotiserTontine(parseInt(tontineId, 10));
+      setPaying(false);
+      if (!result.ok) {
+        Alert.alert('Erreur', result.detail);
+        return;
+      }
+      await refreshUser();
+      router.push({
+        pathname: '/success',
+        params: { type: 'payment', tontineId, ref: result.data.ref_transaction },
+      });
+    })();
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -97,16 +109,7 @@ export default function MakeDepositScreen() {
             {`${formatMoney(currentBalance)}\u202f`}
             <Text style={styles.balanceCurrency}>FCFA</Text>
           </Text>
-          <Text style={styles.balanceHint}>
-            Entrées{' '}
-            <Text style={styles.balanceHintEm}>
-              {formatMonthlyFlow(user?.entrees_ce_mois, 'in')}
-            </Text>
-            {' · '}Sorties{' '}
-            <Text style={styles.balanceHintEm}>
-              {formatMonthlyFlow(user?.sorties_ce_mois, 'out')}
-            </Text>
-          </Text>
+          
         </View>
 
         <View style={styles.payHero}>
@@ -206,10 +209,14 @@ export default function MakeDepositScreen() {
 
         <AnimatedPressable
           style={[styles.confirmButton, !canPay && styles.confirmDisabled]}
-          disabled={!canPay}
-          onPress={() => router.push(confirmParams)}
+          disabled={!canPay || paying}
+          onPress={handleConfirm}
         >
-          <Feather name="check-circle" size={20} color={canPay ? Colors.white : Colors.gray[400]} />
+          {paying ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Feather name="check-circle" size={20} color={canPay ? Colors.white : Colors.gray[400]} />
+          )}
           <Text style={[styles.confirmText, !canPay && styles.confirmTextDisabled]}>
             Confirmer la cotisation
           </Text>

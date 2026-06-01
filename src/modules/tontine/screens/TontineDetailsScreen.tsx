@@ -3,8 +3,11 @@ import {
   Text,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -12,62 +15,124 @@ import Svg, { Circle } from 'react-native-svg';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { getTontineById, parseTurn } from '@/modules/tontine/data/tontines';
-import { needsDefineOrdre, ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
-import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
-import type { Member } from '@/types';
+import { changerTour, demarrerTontine, parseTurn } from '@/shared/api';
+import { useAuth } from '@/shared/auth';
+import { ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
+import { useTontineDetail } from '@/modules/tontine/hooks/useTontineDetail';
+import type { TontineMember } from '@/shared/api';
 
-const membersActive: Member[] = [
-  { id: '1', name: 'Marie Koné', avatar: 'MK', status: 'paid', amount: 10000, turn: 1 },
-  { id: '2', name: 'Jean Diabaté', avatar: 'JD', status: 'paid', amount: 10000, turn: 2 },
-  { id: '3', name: 'Fatou Touré', avatar: 'FT', status: 'current', amount: 10000, turn: 3 },
-  { id: '4', name: 'Amadou Bamba', avatar: 'AB', status: 'late', amount: 10000, turn: 4 },
-];
-
-const membersAwaitingOrdre: Member[] = [
-  { id: '1', name: 'Kouassi Jean', avatar: 'KJ', status: 'paid', amount: 10000, turn: 1 },
-  { id: '2', name: 'Awa Diallo', avatar: 'AD', status: 'paid', amount: 10000, turn: 2 },
-  { id: '3', name: 'Amadou Bamba', avatar: 'AB', status: 'paid', amount: 10000, turn: 3 },
-  { id: '4', name: 'Sophie Traoré', avatar: 'ST', status: 'paid', amount: 10000, turn: 4 },
-  { id: '5', name: 'Moussa Keita', avatar: 'MK', status: 'paid', amount: 10000, turn: 5 },
-  { id: '6', name: 'Fatou Touré', avatar: 'FT', status: 'paid', amount: 10000, turn: 6 },
-  { id: '7', name: 'Jean Diabaté', avatar: 'JD', status: 'paid', amount: 10000, turn: 7 },
-  { id: '8', name: 'Marie Koné', avatar: 'MK', status: 'paid', amount: 10000, turn: 8 },
-];
-
-const statusConfig = {
-  paid: { label: 'Payé', color: Colors.success, bg: withOpacity(Colors.success, 0.1) },
-  current: { label: 'En attente', color: Colors.brand, bg: withOpacity(Colors.brand, 0.1) },
-  late: { label: 'Retard', color: Colors.danger, bg: withOpacity(Colors.danger, 0.06) },
-};
+function memberBadgeConfig(
+  status: TontineMember['status'],
+  turn: number,
+): { label: string; color: string; bg: string } | undefined {
+  switch (status) {
+    case 'awaiting_payment':
+      return {
+        label: 'À votre tour',
+        color: Colors.accent,
+        bg: withOpacity(Colors.accent, 0.12),
+      };
+    case 'waiting_turn':
+      return {
+        label: 'Pas encore votre tour',
+        color: Colors.gray[600],
+        bg: withOpacity(Colors.gray[500], 0.1),
+      };
+    case 'paid':
+      return {
+        label: 'Payé',
+        color: Colors.success,
+        bg: withOpacity(Colors.success, 0.1),
+      };
+    case 'beneficiary':
+      return {
+        label: `Bénéficiaire · tour ${turn}`,
+        color: Colors.brand,
+        bg: withOpacity(Colors.brand, 0.1),
+      };
+    default:
+      return undefined;
+  }
+}
 
 export default function TontineDetailsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
-  const tontineId = typeof params.id === 'string' ? params.id : '1';
-  const tontine = getTontineById(tontineId);
-  const phaseState = useTontinePhase(tontineId);
+  const tontineId = typeof params.id === 'string' ? params.id : undefined;
+  const { detail, loading, error, reload } = useTontineDetail(tontineId);
+  const [startingTour, setStartingTour] = useState(false);
+  const [closingTour, setClosingTour] = useState(false);
 
-  const tontineName = tontine?.name ?? 'Tontine';
-  const cotisationAmount = tontine?.cotisationAmount ?? 10_000;
-  const nombreMax = phaseState?.nombreMax ?? tontine?.nombreMax ?? 8;
-  const membresActifs = phaseState?.membresActifs ?? tontine?.members ?? 0;
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const awaitingOrdre = phaseState ? needsDefineOrdre(phaseState) : false;
-  const isActive = phaseState?.phase === 'active' && phaseState.ordrePublie;
+  if (error || !detail) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error ?? 'Tontine introuvable.'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const members = awaitingOrdre ? membersAwaitingOrdre : membersActive;
-  const paidCount = members.filter((m) => m.status === 'paid').length;
-  const totalAmount = members.reduce((sum, m) => sum + (m.amount || 0), 0);
+  const tontineName = detail.nom;
+  const cotisationAmount = detail.cotisation_amount;
+  const objectifTotal =
+    detail.objectif_total > 0
+      ? detail.objectif_total
+      : parseInt(detail.regles?.objectif_cotisation ?? '0', 10) || 0;
+  const nombreMax = detail.nombre_max;
+  const membresActifs = detail.membres_actifs;
 
-  const baseTurn = tontine?.turn ?? `1/${nombreMax}`;
-  const turnStr = isActive
-    ? baseTurn.startsWith('0/')
-      ? `1/${nombreMax}`
-      : baseTurn
-    : `0/${nombreMax}`;
+  const isHost = user?.id != null && detail.hote_id === user.id;
+
+  const isRecruiting = detail.phase === 'recruiting';
+  const isAwaitingOrdre = detail.phase === 'awaiting_ordre';
+  const awaitingOrdre = isAwaitingOrdre && detail.is_admin;
+  const hasTour = Boolean(detail.tour_courant);
+  const showMemberBadges = detail.phase === 'active' && hasTour;
+  const isActive = detail.phase === 'active' && (hasTour || detail.ordre_publie);
+
+  const members: TontineMember[] = detail.membres;
+  const paidCount = showMemberBadges
+    ? members.filter((m) => m.status === 'paid' || m.status === 'beneficiary').length
+    : 0;
+
+  const turnStr = detail.turn;
   const { current: currentTour, total: totalTours } = parseTurn(turnStr);
-  const tourProgress = isActive ? Math.min(currentTour / totalTours, 1) : 0;
+  const tourProgress = hasTour ? Math.min(currentTour / Math.max(totalTours, 1), 1) : 0;
+
+  const myMembership = members.find((m) => m.user_id === user?.id);
+  const canPay = Boolean(
+    showMemberBadges && myMembership && myMembership.status === 'awaiting_payment',
+  );
+  const canStartTour =
+    isHost &&
+    detail.ordre_publie &&
+    !hasTour &&
+    detail.phase === 'active' &&
+    membresActifs >= nombreMax;
+  const canInvite = detail.is_admin && membresActifs < nombreMax;
+  const allMembersPaid =
+    showMemberBadges && members.length > 0 && paidCount === members.length;
+  const canCloseTour = isHost && hasTour && allMembersPaid;
+  const beneficiaryMember = detail.tour_courant
+    ? members.find((m) => m.user_id === detail.tour_courant?.beneficiaire_id)
+    : undefined;
 
   const gaugeSize = 56;
   const gaugeStroke = 6;
@@ -75,10 +140,71 @@ export default function TontineDetailsScreen() {
   const gaugeCircumference = 2 * Math.PI * gaugeRadius;
   const gaugeOffset = gaugeCircumference * (1 - tourProgress);
 
+  const handleCloseTour = () => {
+    const benefName = beneficiaryMember?.name ?? 'le bénéficiaire';
+    const isLastTour = currentTour >= totalTours;
+    Alert.alert(
+      isLastTour ? 'Clôturer la tontine' : 'Clôturer le tour',
+      isLastTour
+        ? `Verser la cagnotte à ${benefName} et terminer la tontine ?`
+        : `Verser la cagnotte à ${benefName} et passer au tour ${currentTour + 1} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: isLastTour ? 'Terminer' : 'Verser et continuer',
+          onPress: () => {
+            void (async () => {
+              setClosingTour(true);
+              const result = await changerTour(detail.id);
+              setClosingTour(false);
+              if (!result.ok) {
+                Alert.alert('Erreur', result.detail);
+                return;
+              }
+              if (result.data.tontine_terminee) {
+                Alert.alert('Tontine terminée', result.data.detail);
+              }
+              await reload();
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleStartTour = () => {
+    Alert.alert(
+      'Démarrer le cycle',
+      'Lancer le tour 1 et ouvrir les cotisations pour tous les membres ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Démarrer',
+          onPress: () => {
+            void (async () => {
+              setStartingTour(true);
+              const result = await demarrerTontine(detail.id);
+              setStartingTour(false);
+              if (!result.ok) {
+                Alert.alert('Erreur', result.detail);
+                return;
+              }
+              await reload();
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   const openDefineOrdre = () => {
     router.push({
       pathname: '/definir-ordre-ramassage',
-      params: { tontineId, tontineNom: tontineName, memberCount: String(membresActifs) },
+      params: {
+        tontineId: String(detail.id),
+        tontineNom: tontineName,
+        memberCount: String(membresActifs),
+      },
     });
   };
 
@@ -90,24 +216,26 @@ export default function TontineDetailsScreen() {
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </AnimatedPressable>
           <View style={styles.headerActions}>
-            <AnimatedPressable
-              onPress={() =>
-                router.push({
-                  pathname: '/admin',
-                  params: { tontineId, tontineNom: tontineName },
-                })
-              }
-            >
-              <Text style={styles.adminLink}>Admin</Text>
-            </AnimatedPressable>
-            {!awaitingOrdre ? (
+            {isHost ? (
+              <AnimatedPressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/admin',
+                    params: { tontineId, tontineNom: tontineName },
+                  })
+                }
+              >
+                <Text style={styles.adminLink}>Admin</Text>
+              </AnimatedPressable>
+            ) : null}
+            {canInvite ? (
               <>
-                <View style={styles.dot} />
+                {isHost ? <View style={styles.dot} /> : null}
                 <AnimatedPressable
                   onPress={() =>
                     router.push({
                       pathname: '/new-invitation',
-                      params: { tontineId, tontineNom: tontineName },
+                      params: { tontineId: String(detail.id), tontineNom: tontineName },
                     })
                   }
                 >
@@ -115,8 +243,20 @@ export default function TontineDetailsScreen() {
                 </AnimatedPressable>
               </>
             ) : null}
-            <View style={styles.dot} />
-            <AnimatedPressable style={styles.chatLink} onPress={() => router.push('/chat')}>
+            {isHost || canInvite ? <View style={styles.dot} /> : null}
+            <AnimatedPressable
+              style={styles.chatLink}
+              onPress={() =>
+                router.push({
+                  pathname: '/chat',
+                  params: {
+                    id: String(detail.id),
+                    name: tontineName,
+                    members: String(membresActifs),
+                  },
+                })
+              }
+            >
               <Feather name="message-circle" size={16} color={Colors.brand} />
               <Text style={styles.chatLinkText}>Discussion</Text>
             </AnimatedPressable>
@@ -124,7 +264,7 @@ export default function TontineDetailsScreen() {
         </View>
 
         <View style={styles.titleRow}>
-          {isActive ? (
+          {hasTour ? (
             <View style={styles.gaugeWrap}>
               <Svg width={gaugeSize} height={gaugeSize}>
                 <Circle
@@ -169,6 +309,24 @@ export default function TontineDetailsScreen() {
           </View>
         </View>
 
+        {objectifTotal > 0 ? (
+          <View style={styles.objectifCard}>
+            <View style={styles.objectifHeader}>
+              <Feather name="target" size={18} color={Colors.brand} />
+              <Text style={styles.objectifLabel}>Objectif de la collecte</Text>
+            </View>
+            <Text style={styles.objectifAmount}>
+              {objectifTotal.toLocaleString('fr-FR')}{' '}
+              <Text style={styles.objectifUnit}>FCFA</Text>
+            </Text>
+            {cotisationAmount > 0 ? (
+              <Text style={styles.objectifHint}>
+                Mise par participant : {cotisationAmount.toLocaleString('fr-FR')} FCFA à chaque tour
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         {awaitingOrdre ? (
           <View style={styles.actionCard}>
             <View style={styles.actionIconWrap}>
@@ -188,28 +346,91 @@ export default function TontineDetailsScreen() {
               paramètres.
             </Text>
           </View>
-        ) : (
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <View>
-                <Text style={styles.summaryLabel}>Cotisation</Text>
-                <Text style={styles.summaryAmount}>
-                  {cotisationAmount.toLocaleString('fr-FR')}{' '}
-                  <Text style={{ fontSize: 16 }}>FCFA</Text>
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.summaryLabel}>Progression tour</Text>
-                <Text style={styles.summaryProgress}>
-                  {paidCount}/{members.length}
-                </Text>
-              </View>
+        ) : canStartTour ? (
+          <View style={styles.actionCard}>
+            <View style={styles.actionIconWrap}>
+              <Feather name="play-circle" size={24} color={Colors.success} />
             </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(paidCount / members.length) * 100}%` }]} />
-            </View>
+            <Text style={styles.actionTitle}>Prêt à démarrer</Text>
+            <Text style={styles.actionDesc}>
+              Le groupe est complet et l&apos;ordre de ramassage est défini. Lancez le premier tour
+              pour collecter les cotisations.
+            </Text>
+            <AnimatedPressable
+              style={[styles.actionButton, { backgroundColor: Colors.success }]}
+              onPress={handleStartTour}
+              disabled={startingTour}
+            >
+              {startingTour ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Feather name="play" size={18} color={Colors.white} />
+              )}
+              <Text style={styles.actionButtonText}>Démarrer le tour 1</Text>
+            </AnimatedPressable>
           </View>
-        )}
+        ) : showMemberBadges ? (
+          <>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryRow}>
+                <View>
+                  <Text style={styles.summaryLabel}>Cotisation</Text>
+                  <Text style={styles.summaryAmount}>
+                    {cotisationAmount.toLocaleString('fr-FR')}{' '}
+                    <Text style={{ fontSize: 16 }}>FCFA/participant</Text>
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.summaryLabel}>Progression tour</Text>
+                  <Text style={styles.summaryProgress}>
+                    {paidCount}/{members.length}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.progressBar}>
+                <View
+                  style={[styles.progressFill, { width: `${(paidCount / members.length) * 100}%` }]}
+                />
+              </View>
+            </View>
+            {canCloseTour ? (
+              <View style={styles.actionCard}>
+                <View style={[styles.actionIconWrap, { backgroundColor: withOpacity(Colors.brand, 0.12) }]}>
+                  <Feather name="gift" size={24} color={Colors.brand} />
+                </View>
+                <Text style={styles.actionTitle}>Tour complet</Text>
+                <Text style={styles.actionDesc}>
+                  Tous les membres ont cotisé. Versez la cagnotte à{' '}
+                  {beneficiaryMember?.name ?? 'le bénéficiaire'}
+                  {currentTour >= totalTours
+                    ? ' pour clôturer la tontine.'
+                    : ` puis lancez le tour ${currentTour + 1}.`}
+                </Text>
+                <AnimatedPressable
+                  style={styles.actionButton}
+                  onPress={handleCloseTour}
+                  disabled={closingTour}
+                >
+                  {closingTour ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <Feather name="check-circle" size={18} color={Colors.white} />
+                  )}
+                  <Text style={styles.actionButtonText}>
+                    {currentTour >= totalTours
+                      ? 'Verser et terminer la tontine'
+                      : 'Verser et passer au tour suivant'}
+                  </Text>
+                </AnimatedPressable>
+              </View>
+            ) : isHost && hasTour && !allMembersPaid ? (
+              <Text style={styles.hostHint}>
+                En tant qu&apos;hôte, vous pourrez verser la cagnotte une fois que tous les membres
+                auront payé ({paidCount}/{members.length}).
+              </Text>
+            ) : null}
+          </>
+        ) : null}
 
         <View style={styles.membersHeader}>
           <Text style={styles.membersTitle}>
@@ -217,7 +438,14 @@ export default function TontineDetailsScreen() {
           </Text>
         </View>
         {members.map((m) => {
-          const cfg = statusConfig[m.status];
+          const cfg = memberBadgeConfig(m.status, m.turn);
+          const memberSubline = isRecruiting
+            ? 'En recrutement'
+            : isAwaitingOrdre
+              ? `Rang ${m.turn} · ordre de ramassage`
+              : showMemberBadges
+                ? `Tour de ramassage ${m.turn}`
+                : `Rang ${m.turn}`;
           return (
             <View key={m.id} style={styles.memberItem}>
               <View style={styles.memberLeft}>
@@ -226,30 +454,28 @@ export default function TontineDetailsScreen() {
                 </View>
                 <View>
                   <Text style={styles.memberName}>{m.name}</Text>
-                  <Text style={styles.memberTurn}>
-                    {awaitingOrdre ? 'Ordre à attribuer' : `Tour ${m.turn}`}
-                  </Text>
+                  <Text style={styles.memberTurn}>{memberSubline}</Text>
                 </View>
               </View>
-              {!awaitingOrdre ? (
+              {showMemberBadges && cfg ? (
                 <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
                   <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
                 </View>
-              ) : (
+              ) : m.turn > 0 ? (
                 <Text style={styles.positionHint}>#{m.turn}</Text>
-              )}
+              ) : null}
             </View>
           );
         })}
 
-        {isActive ? (
+        {canPay ? (
           <AnimatedPressable
             style={styles.payButton}
             onPress={() =>
               router.push({
                 pathname: '/make-deposit',
                 params: {
-                  tontineId,
+                  tontineId: String(detail.id),
                   tontineName,
                   turn: String(currentTour),
                   amount: String(cotisationAmount),
@@ -261,7 +487,7 @@ export default function TontineDetailsScreen() {
           </AnimatedPressable>
         ) : null}
 
-        {!awaitingOrdre && phaseState?.ordrePublie ? (
+        {!awaitingOrdre && detail.ordre_publie ? (
           <View style={styles.lockBanner}>
             <Feather name="lock" size={16} color={Colors.gray[600]} />
             <Text style={styles.lockText}>{ORDRE_LOCK_MESSAGE}</Text>
@@ -276,6 +502,8 @@ export default function TontineDetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Theme.spacing.page },
+  errorText: { fontFamily: Fonts.outfit.regular, fontSize: 15, color: Colors.gray[600], textAlign: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -317,6 +545,25 @@ const styles = StyleSheet.create({
   gaugeValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: Colors.gray[900] },
   title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.gray[900] },
   subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
+  objectifCard: {
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: Theme.radius.md,
+    backgroundColor: withOpacity(Colors.brand, 0.06),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.15),
+  },
+  objectifHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  objectifLabel: { fontFamily: Fonts.outfit.medium, fontSize: 13, color: Colors.gray[600] },
+  objectifAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 26, color: Colors.gray[900] },
+  objectifUnit: { fontFamily: Fonts.outfit.regular, fontSize: 16, color: Colors.gray[600] },
+  objectifHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[500],
+    marginTop: 8,
+  },
   actionCard: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: Theme.screen.surface,
@@ -371,6 +618,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Theme.spacing.md,
     lineHeight: 18,
+  },
+  hostHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[600],
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   summaryCard: {
     marginHorizontal: Theme.spacing.page,

@@ -5,12 +5,20 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from django.db import transaction
+from django.utils import timezone
 from django.http import JsonResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from apps.utils.utilitaires import _normalize_phone, _generate_qr_payload, _parse_positive_int, _parse_positive_decimal
+from apps.utils.utilitaires import (
+    _normalize_phone,
+    _generate_qr_payload,
+    _parse_positive_int,
+    _parse_positive_decimal,
+    _unique_ref,
+    _resolve_payment_mode,
+)
 
 from apps.tontine.models import (
     Invitations,
@@ -20,7 +28,26 @@ from apps.tontine.models import (
     TontineRegle,
     TourTontine, Chat,
 )
-from apps.tontine.permissions import IsTontineAdmin, user_is_tontine_admin
+from apps.tontine.helpers import (
+    active_members_count,
+    compute_nombre_tours,
+    compute_phase,
+    display_name,
+    groupe_complet,
+    next_member_to_pay,
+    next_provisional_ordre,
+    ordre_ramassage_pret,
+    pending_invitation_for_user,
+    phones_match,
+    serialize_chat_message,
+    serialize_invitation,
+    serialize_tontine_detail,
+    serialize_tontine_summary,
+    tour_en_cours,
+    user_is_active_member,
+)
+from apps.tontine.permissions import user_is_tontine_admin
+from apps.wallet.models import Transaction, Wallet
 
 
 def health(request):
@@ -185,13 +212,14 @@ def _beneficiaire_pour_tour(tontine: Tontine, regle: TontineRegle, numero_du_tou
 
 
 def _pot_attendu(regle: TontineRegle) -> Decimal:
-    return regle.objectif_cotisation * regle.nombre_max
+    return regle.montant_cotisation * regle.nombre_max
 
 
 def _serialize_regle(regle: TontineRegle) -> dict:
     return {
         "id": regle.id,
         "objectif_cotisation": str(regle.objectif_cotisation),
+        "montant_cotisation": str(regle.montant_cotisation),
         "montant_penalite": str(regle.montant_penalite),
         "nombre_max": regle.nombre_max,
         "nombre_tours": regle.nombre_tours,
@@ -202,10 +230,14 @@ def _serialize_regle(regle: TontineRegle) -> dict:
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated, IsTontineAdmin])
+@permission_classes([IsAuthenticated])
 def create_tontine(request):
     """Création par l’utilisateur connecté : il devient hôte et premier membre admin."""
-    raw_type = (request.data.get("type_tontine") or request.data.get("tontine_type") or "").strip()
+    raw_type = (
+        request.data.get("type_tontine")
+        or request.data.get("tontine_type")
+        or Tontine.TYPE_TONTINE.GROUPE
+    ).strip()
     valid_types = {c for c, _ in Tontine.TYPE_TONTINE.choices}
     if raw_type not in valid_types:
         return Response(
@@ -213,7 +245,12 @@ def create_tontine(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    nom = (request.data.get("nom_projet") or request.data.get("nom") or "").strip()
     description = (request.data.get("description") or "").strip()
+    if nom and description and description != nom:
+        description = f"{nom} — {description}"
+    elif nom:
+        description = nom
     if not description:
         return Response({"detail": "La description est obligatoire."}, status=status.HTTP_400_BAD_REQUEST)
     if len(description) > 300:
@@ -293,7 +330,16 @@ def define_tontine_regle(request):
     objectif_cotisation = _parse_positive_int(request.data.get("objectif_cotisation"))
     if objectif_cotisation is None:
         return Response(
-            {"detail": "Montant de cotisation invalide ou absent."},
+            {"detail": "Objectif de cotisation (montant total) invalide ou absent."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    montant_cotisation = _parse_positive_int(
+        request.data.get("montant_cotisation") or request.data.get("montant_par_participant")
+    )
+    if montant_cotisation is None:
+        return Response(
+            {"detail": "Montant par participant invalide ou absent."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -304,9 +350,13 @@ def define_tontine_regle(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    nombre_tours = _parse_positive_int(request.data.get("nombre_tours"))
-    if nombre_tours is None:
-        nombre_tours = nombre_max
+    try:
+        nombre_tours = compute_nombre_tours(objectif_cotisation, montant_cotisation, nombre_max)
+    except ValueError:
+        return Response(
+            {"detail": "Impossible de calculer le nombre de tours avec ces montants."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     ordre_raw = request.data.get("ordre_choisie") or request.data.get("ordre_ramassage")
     ordre_ramassage = _resolve_ordre_ramassage(ordre_raw)
@@ -357,13 +407,20 @@ def define_tontine_regle(request):
     regles = TontineRegle.objects.create(
         tontine=tontine,
         objectif_cotisation=objectif_cotisation,
+        montant_cotisation=montant_cotisation,
         montant_penalite=montant_penalite,
         nombre_max=nombre_max,
         nombre_tours=nombre_tours,
         ordre_ramassage=ordre_ramassage,
         frequence=frequence_choisie,
-        frequence_personnalise=frequence_personnalise,
+        frequence_personalise=frequence_personnalise,
     )
+
+    now = timezone.now()
+    TontineMembre.objects.filter(
+        tontine=tontine,
+        statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+    ).update(regles_acceptees=True, date_acceptation_regles=now)
 
     penalites_payload = {
         "active": inclure_penalite,
@@ -374,6 +431,7 @@ def define_tontine_regle(request):
         {
             "tontine_id": tontine.id,
             "regles": _serialize_regle(regles),
+            "nombre_tours": nombre_tours,
             "penalites": penalites_payload,
         },
         status=status.HTTP_201_CREATED,
@@ -478,6 +536,11 @@ def attribute_penalite(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def changer_tour(request):
+    """Clôture le tour en cours et démarre le suivant (ou le tour 1)."""
+    return _changer_tour_impl(request)
+
+
+def _changer_tour_impl(request):
     """
     Clôture le tour en cours (TERMINÉ) et démarre le tour suivant (EN COURS).
     Sans tour existant : démarre le tour 1.
@@ -570,6 +633,17 @@ def changer_tour(request):
                 status=status.HTTP_201_CREATED,
             )
 
+        if next_member_to_pay(tontine, tour_en_cours) is not None:
+            return Response(
+                {
+                    "detail": (
+                        "Toutes les cotisations du tour ne sont pas encore réglées. "
+                        "Attendez que chaque membre ait payé avant de clôturer."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         numero_suivant = tour_en_cours.numero_du_tour + 1
         beneficiaire_suivant = None
 
@@ -592,12 +666,28 @@ def changer_tour(request):
 
         montant_cloture = _parse_positive_decimal(request.data.get("montant_depose"))
         if montant_cloture is None:
-            montant_cloture = _pot_attendu(regle)
+            montant_cloture = tour_en_cours.montant_depose or _pot_attendu(regle)
 
         tour_en_cours.montant_depose = montant_cloture
         tour_en_cours.statut_tour = TourTontine.STATUT_TOUR.TERMINE
         tour_en_cours.save(update_fields=["montant_depose", "statut_tour"])
         tour_cloture_data = _serialize_tour(tour_en_cours)
+
+        benef_wallet, _ = Wallet.objects.select_for_update().get_or_create(
+            user=tour_en_cours.user
+        )
+        benef_wallet.solde_courant += montant_cloture
+        benef_wallet.save(update_fields=["solde_courant"])
+        ref_credit = _unique_ref("T")
+        Transaction.objects.create(
+            wallet=benef_wallet,
+            solde_courant=benef_wallet.solde_courant,
+            ref_transaction=ref_credit,
+            mode_de_paiement=Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI,
+            montant_transaction=montant_cloture,
+            statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
+            type_transaction=Transaction.TYPE_TRANSACTION.DEPOT,
+        )
 
         if numero_suivant > regle.nombre_tours:
             tontine.est_active = False
@@ -630,7 +720,7 @@ def changer_tour(request):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated, IsTontineAdmin])
+@permission_classes([IsAuthenticated])
 def send_invitation(request):
     """Crée une invitation (hôte ou admin de la tontine uniquement)."""
     tontine_id = request.data.get("tontine_id")
@@ -669,4 +759,536 @@ def send_invitation(request):
         },
         status=status.HTTP_201_CREATED,
     )
+
+
+def _get_tontine_for_member(user, tontine_id, *, type_filter=None):
+    try:
+        tontine = Tontine.objects.get(pk=tontine_id)
+    except (Tontine.DoesNotExist, ValueError, TypeError):
+        return None, Response({"detail": "Tontine introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    if type_filter and tontine.type_tontine != type_filter:
+        return None, Response({"detail": "Type de tontine incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+    if not user_is_active_member(user, tontine) and not user_is_tontine_admin(user, tontine):
+        return None, Response({"detail": "Accès refusé."}, status=status.HTTP_403_FORBIDDEN)
+    return tontine, None
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_tontines(request):
+    """Tontines de groupe visibles (hors phase recrutement) pour l'utilisateur connecté."""
+    user = request.user
+    memberships = (
+        TontineMembre.objects.filter(
+            membre=user,
+            statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+            tontine__type_tontine=Tontine.TYPE_TONTINE.GROUPE,
+        )
+        .select_related("tontine")
+        .order_by("-tontine__date_creation")
+    )
+    results = []
+    for membership in memberships:
+        tontine = membership.tontine
+        regle = _get_regle(tontine)
+        phase = compute_phase(tontine, regle)
+        if phase == "recruiting":
+            continue
+        results.append(serialize_tontine_summary(tontine, regle, for_user=user))
+    return Response({"count": len(results), "results": results})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_my_tontines_recruiting(request):
+    """Tontines en recrutement (créateur ou membre)."""
+    user = request.user
+    memberships = (
+        TontineMembre.objects.filter(
+            membre=user,
+            statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+            tontine__type_tontine=Tontine.TYPE_TONTINE.GROUPE,
+        )
+        .select_related("tontine")
+        .order_by("-tontine__date_creation")
+    )
+    results = []
+    for membership in memberships:
+        tontine = membership.tontine
+        regle = _get_regle(tontine)
+        if compute_phase(tontine, regle) != "recruiting":
+            continue
+        results.append(serialize_tontine_summary(tontine, regle, for_user=user))
+    return Response({"count": len(results), "results": results})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_tontine_detail(request):
+    tontine_id = request.query_params.get("id") or request.query_params.get("tontine_id")
+    if tontine_id in (None, ""):
+        return Response({"detail": "id requis."}, status=status.HTTP_400_BAD_REQUEST)
+    tontine, err = _get_tontine_for_member(
+        request.user, tontine_id, type_filter=Tontine.TYPE_TONTINE.GROUPE
+    )
+    if err is not None:
+        return err
+    regle = _get_regle(tontine)
+    return Response(serialize_tontine_detail(tontine, regle, request.user))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_chat_messages(request):
+    """Messages de la discussion d'une tontine (membres actifs / admin uniquement)."""
+    tontine_id = request.query_params.get("tontine_id") or request.query_params.get("id")
+    if tontine_id in (None, ""):
+        return Response({"detail": "tontine_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+    tontine, err = _get_tontine_for_member(request.user, tontine_id)
+    if err is not None:
+        return err
+
+    qs = Chat.objects.filter(tontine=tontine).select_related("expediteur").order_by("date")
+
+    after = request.query_params.get("after")
+    if after not in (None, ""):
+        after_id = _parse_positive_int(after)
+        if after_id is not None:
+            qs = qs.filter(id__gt=after_id)
+
+    messages = [serialize_chat_message(m, for_user=request.user) for m in qs]
+    return Response(
+        {
+            "results": messages,
+            "tontine_id": tontine.id,
+            "tontine_nom": display_name(tontine),
+            "membres_actifs": active_members_count(tontine),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def post_chat_message(request):
+    """Publie un message dans la discussion d'une tontine."""
+    tontine_id = request.data.get("tontine_id")
+    if tontine_id in (None, ""):
+        return Response({"detail": "tontine_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+
+    contenu = (request.data.get("contenu") or "").strip()
+    if not contenu:
+        return Response({"detail": "Le message ne peut pas être vide."}, status=status.HTTP_400_BAD_REQUEST)
+    if len(contenu) > 255:
+        return Response({"detail": "Message trop long (255 caractères max)."}, status=status.HTTP_400_BAD_REQUEST)
+
+    tontine, err = _get_tontine_for_member(request.user, tontine_id)
+    if err is not None:
+        return err
+
+    message = Chat.objects.create(
+        tontine=tontine,
+        expediteur=request.user,
+        contenu=contenu,
+    )
+    return Response(
+        serialize_chat_message(message, for_user=request.user),
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def accept_invitation(request):
+    token = (request.data.get("token") or "").strip()
+    tontine_id = request.data.get("tontine_id")
+
+    invitation = None
+    if token:
+        try:
+            invitation = Invitations.objects.select_related("tontine").get(
+                token=token,
+                est_utilisee=False,
+                statut_invitation=Invitations.STATUT_INVITATION.EN_ATTENTE,
+            )
+        except Invitations.DoesNotExist:
+            return Response({"detail": "Invitation invalide ou expirée."}, status=status.HTTP_404_NOT_FOUND)
+        tontine = invitation.tontine
+    elif tontine_id not in (None, ""):
+        try:
+            tontine = Tontine.objects.get(
+                pk=tontine_id,
+                type_tontine=Tontine.TYPE_TONTINE.GROUPE,
+            )
+        except (Tontine.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Tontine introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        invitation = pending_invitation_for_user(tontine, request.user)
+        if invitation is None:
+            return Response(
+                {"detail": "Aucune invitation en attente pour ce groupe."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        return Response(
+            {"detail": "token ou tontine_id requis."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if tontine.type_tontine != Tontine.TYPE_TONTINE.GROUPE:
+        return Response({"detail": "Type de tontine incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = request.user
+    if not phones_match(invitation.numero_telephone_invite, user):
+        return Response(
+            {"detail": "Cette invitation ne correspond pas à votre numéro."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if TontineMembre.objects.filter(
+        tontine=tontine, membre=user, statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF
+    ).exists():
+        return Response({"detail": "Vous êtes déjà membre de ce groupe."}, status=status.HTTP_400_BAD_REQUEST)
+
+    regle = _get_regle(tontine)
+    if regle is None:
+        return Response(
+            {"detail": "Les règles du groupe ne sont pas encore définies."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not _as_bool(request.data.get("accepte_regles")):
+        return Response(
+            {"detail": "Vous devez accepter les règles du groupe pour rejoindre."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if active_members_count(tontine) >= regle.nombre_max:
+        return Response({"detail": "Le groupe est complet."}, status=status.HTTP_400_BAD_REQUEST)
+
+    ordre = next_provisional_ordre(tontine, regle)
+    if ordre is None:
+        return Response({"detail": "Impossible d'attribuer un ordre de ramassage."}, status=status.HTTP_400_BAD_REQUEST)
+
+    now = timezone.now()
+    with transaction.atomic():
+        TontineMembre.objects.create(
+            tontine=tontine,
+            membre=user,
+            role_membre=TontineMembre.ROLE_MEMBRE.PARTICIPANT,
+            statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+            ordre_ramassage=ordre,
+            regles_acceptees=True,
+            date_acceptation_regles=now,
+        )
+        invitation.statut_invitation = Invitations.STATUT_INVITATION.ACCEPTEE
+        invitation.est_utilisee = True
+        invitation.save(update_fields=["statut_invitation", "est_utilisee"])
+
+    regle = _get_regle(tontine)
+    return Response(
+        {
+            "detail": "Vous avez rejoint le groupe.",
+            "tontine": serialize_tontine_detail(tontine, regle, user),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_my_invitations(request):
+    """Invitations en attente correspondant au numéro de l'utilisateur connecté."""
+    user = request.user
+    pending = (
+        Invitations.objects.filter(
+            statut_invitation=Invitations.STATUT_INVITATION.EN_ATTENTE,
+            est_utilisee=False,
+            tontine__type_tontine=Tontine.TYPE_TONTINE.GROUPE,
+        )
+        .select_related("tontine", "tontine__hote")
+        .order_by("-date_invitation")
+    )
+    results = []
+    for inv in pending:
+        if not phones_match(inv.numero_telephone_invite, user):
+            continue
+        if TontineMembre.objects.filter(
+            tontine=inv.tontine,
+            membre=user,
+            statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+        ).exists():
+            continue
+        regle = _get_regle(inv.tontine)
+        results.append(serialize_invitation(inv, regle))
+    return Response({"results": results})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def preview_invitation(request):
+    """Aperçu d'un groupe à partir d'un token (avant de rejoindre)."""
+    token = (request.query_params.get("token") or "").strip()
+    if not token:
+        return Response({"detail": "token requis."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        invitation = Invitations.objects.select_related("tontine", "tontine__hote").get(
+            token=token,
+            est_utilisee=False,
+            statut_invitation=Invitations.STATUT_INVITATION.EN_ATTENTE,
+        )
+    except Invitations.DoesNotExist:
+        return Response({"detail": "Invitation invalide ou expirée."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not phones_match(invitation.numero_telephone_invite, request.user):
+        return Response(
+            {"detail": "Cette invitation ne correspond pas à votre numéro."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    regle = _get_regle(invitation.tontine)
+    return Response(serialize_invitation(invitation, regle))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def refuse_invitation(request):
+    """Décline une invitation reçue (la retire des invitations en attente)."""
+    token = (request.data.get("token") or "").strip()
+    if not token:
+        return Response({"detail": "token requis."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        invitation = Invitations.objects.select_related("tontine").get(
+            token=token,
+            est_utilisee=False,
+            statut_invitation=Invitations.STATUT_INVITATION.EN_ATTENTE,
+        )
+    except Invitations.DoesNotExist:
+        return Response({"detail": "Invitation introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not phones_match(invitation.numero_telephone_invite, request.user):
+        return Response(
+            {"detail": "Cette invitation ne correspond pas à votre numéro."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    invitation.est_utilisee = True
+    invitation.save(update_fields=["est_utilisee"])
+    return Response({"detail": "Invitation refusée."}, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def set_ordre_ramassage(request):
+    tontine_id = request.data.get("tontine_id")
+    if tontine_id in (None, ""):
+        return Response({"detail": "tontine_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        tontine = Tontine.objects.get(pk=tontine_id, type_tontine=Tontine.TYPE_TONTINE.GROUPE)
+    except (Tontine.DoesNotExist, ValueError, TypeError):
+        return Response({"detail": "Tontine introuvable."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not user_is_tontine_admin(request.user, tontine):
+        return Response(
+            {"detail": "Seul l'administrateur peut définir l'ordre."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    regle = _get_regle(tontine)
+    if regle is None:
+        return Response({"detail": "Règles non définies."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if regle.ordre_ramassage != TontineRegle.ORDRE_RAMASSAGE.DEFINI_PAR_ADMIN:
+        return Response(
+            {"detail": "L'ordre est géré automatiquement pour cette tontine."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not groupe_complet(tontine, regle):
+        return Response(
+            {
+                "detail": (
+                    f"Le groupe n'est pas complet "
+                    f"({active_members_count(tontine)}/{regle.nombre_max})."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if TourTontine.objects.filter(tontine=tontine).exists():
+        return Response(
+            {"detail": "L'ordre ne peut plus être modifié après le début des tours."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    ordres_payload = request.data.get("ordres") or request.data.get("members")
+    if not isinstance(ordres_payload, list) or not ordres_payload:
+        return Response({"detail": "Liste ordres requise."}, status=status.HTTP_400_BAD_REQUEST)
+
+    mapping = {}
+    for item in ordres_payload:
+        if not isinstance(item, dict):
+            continue
+        membre_pk = item.get("membre_id") or item.get("id")
+        ordre_val = _parse_positive_int(item.get("ordre_ramassage") or item.get("ordre"))
+        if membre_pk in (None, "") or ordre_val is None:
+            continue
+        mapping[int(membre_pk)] = ordre_val
+
+    actifs = list(
+        TontineMembre.objects.filter(
+            tontine=tontine,
+            statut_membre=TontineMembre.STATUT_MEMBRE.ACTIF,
+        )
+    )
+    if len(mapping) != len(actifs):
+        return Response(
+            {"detail": "Tous les membres actifs doivent avoir un ordre."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    expected = set(range(1, regle.nombre_max + 1))
+    if set(mapping.values()) != expected:
+        return Response(
+            {"detail": f"L'ordre doit être une permutation de 1 à {regle.nombre_max}."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    actif_ids = {tm.id for tm in actifs}
+    if set(mapping.keys()) != actif_ids:
+        return Response({"detail": "Identifiants de membres invalides."}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        for tm in actifs:
+            tm.ordre_ramassage = mapping[tm.id]
+            tm.save(update_fields=["ordre_ramassage"])
+
+    return Response(
+        {
+            "detail": "Ordre de ramassage publié.",
+            "tontine": serialize_tontine_detail(tontine, regle, request.user),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cotiser_tontine(request):
+    tontine_id = request.data.get("tontine_id")
+    if tontine_id in (None, ""):
+        return Response({"detail": "tontine_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+
+    tontine, err = _get_tontine_for_member(
+        request.user, tontine_id, type_filter=Tontine.TYPE_TONTINE.GROUPE
+    )
+    if err is not None:
+        return err
+
+    regle = _get_regle(tontine)
+    if regle is None:
+        return Response({"detail": "Règles non définies."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not ordre_ramassage_pret(tontine, regle) and regle.ordre_ramassage == TontineRegle.ORDRE_RAMASSAGE.DEFINI_PAR_ADMIN:
+        return Response(
+            {"detail": "L'ordre de ramassage doit être publié avant les cotisations."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    tour = tour_en_cours(tontine)
+    if tour is None:
+        return Response(
+            {"detail": "Aucun tour en cours. L'administrateur doit démarrer le cycle."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = request.user
+    montant = _parse_positive_decimal(request.data.get("montant"))
+    if montant is None:
+        montant = regle.montant_cotisation
+    if montant != regle.montant_cotisation:
+        return Response(
+            {
+                "detail": (
+                    f"La cotisation doit être de {regle.montant_cotisation} F "
+                    "pour ce tour."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if Transaction.objects.filter(
+        tour=tour,
+        tontine=tontine,
+        wallet__user=user,
+        type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
+        statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
+    ).exists():
+        return Response(
+            {"detail": "Vous avez déjà réglé votre cotisation pour ce tour."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    next_tm = next_member_to_pay(tontine, tour)
+    if next_tm is None:
+        return Response(
+            {"detail": "Toutes les cotisations de ce tour sont déjà réglées."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if next_tm.membre_id != user.id:
+        name = f"{next_tm.membre.first_name or ''} {next_tm.membre.last_name or ''}".strip()
+        who = name or next_tm.membre.numero_telephone or "un autre membre"
+        return Response(
+            {
+                "detail": (
+                    f"Ce n'est pas encore votre tour. C'est au tour de {who} "
+                    f"(rang {next_tm.ordre_ramassage})."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    mode = _resolve_payment_mode(request.data.get("mode_de_paiement"))
+    if mode is None:
+        mode = Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI
+
+    ref = ""
+    with transaction.atomic():
+        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
+        if wallet.solde_courant < montant:
+            return Response({"detail": "Solde insuffisant."}, status=status.HTTP_400_BAD_REQUEST)
+
+        wallet.solde_courant -= montant
+        wallet.save(update_fields=["solde_courant"])
+
+        tour_locked = TourTontine.objects.select_for_update().get(pk=tour.pk)
+        tour_locked.montant_depose += montant
+        tour_locked.save(update_fields=["montant_depose"])
+
+        ref = _unique_ref("C")
+        Transaction.objects.create(
+            wallet=wallet,
+            tontine=tontine,
+            tour=tour_locked,
+            solde_courant=wallet.solde_courant,
+            ref_transaction=ref,
+            mode_de_paiement=mode,
+            montant_transaction=montant,
+            statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
+            type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
+        )
+
+    return Response(
+        {
+            "detail": "Cotisation enregistrée.",
+            "ref_transaction": ref,
+            "tontine": serialize_tontine_detail(tontine, _get_regle(tontine), user),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def demarrer_tontine(request):
+    """Alias explicite pour démarrer le tour 1 (même logique que changer_tour)."""
+    return _changer_tour_impl(request)
 

@@ -64,6 +64,8 @@ export default function SavingsTransactionDetailScreen() {
     );
   }
 
+  const isWithdraw = transaction.amount < 0;
+  const displayAmount = Math.abs(transaction.amount);
   const statusColor =
     transaction.status === 'Complété'
       ? Colors.success
@@ -81,12 +83,31 @@ export default function SavingsTransactionDetailScreen() {
         </View>
 
         <View style={styles.hero}>
-          <View style={styles.heroIcon}>
-            <Feather name="arrow-down-left" size={32} color={Colors.success} />
+          <View
+            style={[
+              styles.heroIcon,
+              {
+                backgroundColor: isWithdraw
+                  ? withOpacity(Colors.brand, 0.12)
+                  : withOpacity(Colors.success, 0.12),
+              },
+            ]}
+          >
+            <Feather
+              name={isWithdraw ? 'arrow-up-right' : 'arrow-down-left'}
+              size={32}
+              color={isWithdraw ? Colors.brand : Colors.success}
+            />
           </View>
           <Text style={styles.typeLabel}>{transaction.type}</Text>
-          <Text style={styles.amount}>
-            +{transaction.amount.toLocaleString('fr-FR')}{' '}
+          <Text
+            style={[
+              styles.amount,
+              { color: isWithdraw ? Colors.brand : Colors.success },
+            ]}
+          >
+            {isWithdraw ? '−' : '+'}
+            {displayAmount.toLocaleString('fr-FR')}{' '}
             <Text style={styles.currency}>FCFA</Text>
           </Text>
           <View style={[styles.statusPill, { backgroundColor: withOpacity(statusColor, 0.12) }]}>

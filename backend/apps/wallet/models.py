@@ -35,6 +35,7 @@ class Transaction(models.Model):
         RETRAIT = "RETRAIT", _("Retrait")
         DEPOT = "DÉPÔT", _("Dépôt")
         VERSEMENT_EPARGNE_PERSONNELLE = "VERSEMENT_EPARGNE_PERSONNELLE", _("Versement épargne personnelle")
+        RETRAIT_EPARGNE_PERSONNELLE = "RETRAIT_EPARGNE_PERSONNELLE", _("Retrait épargne personnelle")
         DEBIT = "DÉBIT", _("Débit")
 
     tontine = models.ForeignKey(Tontine, on_delete=models.CASCADE, null=True, blank=True)
@@ -60,6 +61,12 @@ class Transaction(models.Model):
                 check=(
                     models.Q(
                         type_transaction="VERSEMENT_EPARGNE_PERSONNELLE",
+                        epargne__isnull=False,
+                        tontine__isnull=True,
+                        tour__isnull=True,
+                    )
+                    | models.Q(
+                        type_transaction="RETRAIT_EPARGNE_PERSONNELLE",
                         epargne__isnull=False,
                         tontine__isnull=True,
                         tour__isnull=True,
@@ -106,14 +113,14 @@ class Transaction(models.Model):
                     {"tour": _("Le tour doit appartenir à la tontine indiquée.")}
                 )
 
-        if tt == T.VERSEMENT_EPARGNE_PERSONNELLE:
+        if tt in (T.VERSEMENT_EPARGNE_PERSONNELLE, T.RETRAIT_EPARGNE_PERSONNELLE):
             if not self.epargne_id:
                 raise ValidationError(
-                    {"epargne": _("Un versement épargne doit référencer un projet d’épargne.")}
+                    {"epargne": _("Une opération épargne doit référencer un projet d’épargne.")}
                 )
             if self.tontine_id or self.tour_id:
                 raise ValidationError(
-                    _("Un versement épargne ne doit pas être lié à une tontine ni à un tour.")
+                    _("Une opération épargne ne doit pas être liée à une tontine ni à un tour.")
                 )
             if self.wallet_id and self.epargne_id:
                 w_user = self.wallet.user_id

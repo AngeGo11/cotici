@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,16 +6,15 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import {
-  getActiveTontinesForCotisation,
-  parseTurn,
-} from '@/modules/tontine/data/tontines';
+import { parseTurn } from '@/shared/api';
+import { useTontines } from '@/modules/tontine/hooks/useTontines';
 
 export default function ChooseTontineCotisationScreen() {
   const router = useRouter();
-  const tontines = getActiveTontinesForCotisation();
+  const { tontines, loading, error } = useTontines();
+  const cotisable = tontines.filter((t) => t.tourCourant != null);
 
-  const handleSelect = (tontine: (typeof tontines)[number]) => {
+  const handleSelect = (tontine: (typeof cotisable)[number]) => {
     const { current } = parseTurn(tontine.turn);
     router.push({
       pathname: '/make-deposit',
@@ -46,68 +45,61 @@ export default function ChooseTontineCotisationScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {tontines.length === 0 ? (
+        {loading ? <ActivityIndicator color={Colors.brand} style={styles.loader} /> : null}
+
+        {!loading && error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : null}
+
+        {!loading && !error && cotisable.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="users" size={40} color={Colors.gray[300]} />
             <Text style={styles.emptyTitle}>Aucune tontine active</Text>
             <Text style={styles.emptySub}>
-              Rejoignez ou créez une tontine pour pouvoir payer une cotisation.
+              Aucun tour en cours. L&apos;administrateur doit démarrer le cycle.
             </Text>
             <AnimatedPressable
               style={styles.emptyCta}
-              onPress={() => router.push('/create-savings')}
+              onPress={() => router.push('/create-classic-tontine')}
             >
               <Text style={styles.emptyCtaText}>Créer une tontine</Text>
             </AnimatedPressable>
           </View>
-        ) : (
-          tontines.map((tontine) => {
-            const { current, total } = parseTurn(tontine.turn);
-            return (
-              <AnimatedPressable
-                key={tontine.id}
-                style={styles.card}
-                onPress={() => handleSelect(tontine)}
-                accessibilityRole="button"
-                accessibilityLabel={`Payer la cotisation pour ${tontine.name}`}
-              >
-                <View style={styles.cardTop}>
-                  <View
-                    style={[
-                      styles.cardIcon,
-                      tontine.isSolidarity && styles.cardIconSolidarity,
-                    ]}
-                  >
-                    <Feather
-                      name={tontine.isSolidarity ? 'heart' : 'users'}
-                      size={22}
-                      color={Colors.brand}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.tontineName}>{tontine.name}</Text>
-                    <Text style={styles.tontineMeta}>
-                      {tontine.members} membres · Tour {current}/{total}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
+        ) : null}
+
+        {cotisable.map((tontine) => {
+          const { current, total } = parseTurn(tontine.turn);
+          return (
+            <AnimatedPressable
+              key={tontine.id}
+              style={styles.card}
+              onPress={() => handleSelect(tontine)}
+              accessibilityRole="button"
+              accessibilityLabel={`Payer la cotisation pour ${tontine.name}`}
+            >
+              <View style={styles.cardTop}>
+                <View style={styles.cardIcon}>
+                  <Feather name="users" size={22} color={Colors.brand} />
                 </View>
-                <View style={styles.cardBottom}>
-                  <View>
-                    <Text style={styles.amountLabel}>Cotisation à payer</Text>
-                    <Text style={styles.amountValue}>
-                      {tontine.cotisationAmount.toLocaleString('fr-FR')} FCFA
-                    </Text>
-                  </View>
-                  <View style={styles.payChip}>
-                    <Text style={styles.payChipText}>Continuer</Text>
-                  </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tontineName}>{tontine.name}</Text>
+                  <Text style={styles.tontineMeta}>
+                    {tontine.members}/{tontine.nombreMax} membres · Tour {current}/{total}
+                  </Text>
                 </View>
-              </AnimatedPressable>
-            );
-          })
-        )}
-        <View style={{ height: 40 }} />
+                <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
+              </View>
+              <View style={styles.cardBottom}>
+                <View>
+                  <Text style={styles.amountLabel}>Cotisation à payer</Text>
+                  <Text style={styles.amountValue}>
+                    {tontine.cotisationAmount.toLocaleString('fr-FR')} FCFA
+                  </Text>
+                </View>
+              </View>
+            </AnimatedPressable>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -120,31 +112,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Theme.spacing.page,
-    paddingVertical: Theme.spacing.sm,
+    paddingVertical: 12,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Theme.screen.surface,
+    backgroundColor: Colors.gray[100],
     alignItems: 'center',
     justifyContent: 'center',
-    ...Theme.shadow.soft,
   },
-  headerTitle: {
-    fontFamily: Fonts.spaceGrotesk.bold,
-    fontSize: 18,
-    color: Colors.gray[900],
-  },
+  headerTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
   subtitle: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 14,
     color: Colors.gray[600],
-    lineHeight: 20,
     paddingHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.lg,
+    lineHeight: 20,
   },
-  scroll: { paddingHorizontal: Theme.spacing.page },
+  scroll: { paddingHorizontal: Theme.spacing.page, paddingBottom: 40 },
+  loader: { marginVertical: 24 },
+  errorText: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.danger,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  empty: { alignItems: 'center', paddingVertical: 48, gap: 12 },
+  emptyTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[800] },
+  emptySub: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyCta: {
+    marginTop: 8,
+    backgroundColor: Colors.brand,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: Theme.radius.md,
+  },
+  emptyCtaText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.white },
   card: {
     backgroundColor: Theme.screen.surface,
     borderRadius: Theme.radius.lg,
@@ -154,12 +166,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray[100],
     ...Theme.shadow.card,
   },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-  },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: Theme.spacing.md, marginBottom: 12 },
   cardIcon: {
     width: 48,
     height: 48,
@@ -168,79 +175,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardIconSolidarity: {
-    backgroundColor: withOpacity(Colors.accent, 0.12),
-  },
-  tontineName: {
-    fontFamily: Fonts.spaceGrotesk.bold,
-    fontSize: 17,
-    color: Colors.gray[900],
-    marginBottom: 4,
-  },
-  tontineMeta: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: Colors.gray[500],
-  },
+  tontineName: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 17, color: Colors.gray[900], marginBottom: 4 },
+  tontineMeta: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
   cardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Theme.spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
+    borderTopWidth: 1,
     borderTopColor: Colors.gray[100],
   },
-  amountLabel: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 12,
-    color: Colors.gray[500],
-    marginBottom: 2,
-  },
-  amountValue: {
-    fontFamily: Fonts.spaceGrotesk.bold,
-    fontSize: 18,
-    color: Colors.success,
-  },
-  payChip: {
-    backgroundColor: withOpacity(Colors.brand, 0.1),
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Theme.radius.pill,
-  },
-  payChipText: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 13,
-    color: Colors.brand,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: Theme.spacing.lg,
-  },
-  emptyTitle: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 18,
-    color: Colors.gray[900],
-    marginTop: Theme.spacing.lg,
-    marginBottom: 8,
-  },
-  emptySub: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    color: Colors.gray[500],
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: Theme.spacing.xl,
-  },
-  emptyCta: {
-    backgroundColor: Colors.brand,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: 14,
-    borderRadius: Theme.radius.md,
-  },
-  emptyCtaText: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 15,
-    color: Colors.white,
-  },
+  amountLabel: { fontFamily: Fonts.outfit.regular, fontSize: 11, color: Colors.gray[500], marginBottom: 2 },
+  amountValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
 });

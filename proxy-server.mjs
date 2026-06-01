@@ -124,6 +124,34 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/api/tontine/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/tontine/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/tontine/recruiting/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/tontine/recruiting/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.startsWith("/api/tontine/detail")) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/tontine/detail/${query}`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/api/tontine/create/") {
     await proxyToDjango(req, res, {
       upstreamPath: "/api/tontine/create/",
@@ -135,6 +163,73 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/tontine/regles/") {
     await proxyToDjango(req, res, {
       upstreamPath: "/api/tontine/regles/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/invitations/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/invitations/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/tontine/invitations/mine/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/tontine/invitations/mine/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.startsWith("/api/tontine/invitations/preview")) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/tontine/invitations/preview/${query}`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/invitations/accept/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/invitations/accept/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/invitations/refuse/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/invitations/refuse/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/ordre/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/ordre/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/cotiser/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/cotiser/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/tours/demarrer/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/tours/demarrer/",
       forwardBearer: true,
     });
     return;
@@ -156,19 +251,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/tontine/invitations/") {
+  if (req.method === "GET" && req.url.startsWith("/api/tontine/chat/") && !req.url.startsWith("/api/tontine/chat/send")) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
     await proxyToDjango(req, res, {
-      upstreamPath: "/api/tontine/invitations/",
+      method: "GET",
+      upstreamPath: `/api/tontine/chat/${query}`,
       forwardBearer: true,
     });
     return;
   }
 
+  if (req.method === "POST" && req.url === "/api/tontine/chat/send/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/chat/send/",
+      forwardBearer: true,
+    });
+    return;
+  }
 
   if (req.method === "GET" && req.url === "/api/savings/") {
     await proxyToDjango(req, res, {
       method: "GET",
       upstreamPath: "/api/savings/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/savings/archived/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/savings/archived/",
       forwardBearer: true,
     });
     return;
@@ -196,6 +309,30 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/savings/deposit/") {
     await proxyToDjango(req, res, {
       upstreamPath: "/api/savings/deposit/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/savings/withdraw/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/savings/withdraw/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/savings/archive/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/savings/archive/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/savings/delete/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/savings/delete/",
       forwardBearer: true,
     });
     return;

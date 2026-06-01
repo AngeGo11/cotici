@@ -109,6 +109,7 @@ def count_savings(request):
 
     return EpargnePersonnelle.objects.filter(
         hote=user,
+        etat=EpargnePersonnelle.ETAT.ACTIF,
     ).count()
 
 @api_view(["POST"])

@@ -8,7 +8,10 @@ from apps.wallet.services.monthly_stats import month_start
 
 
 def get_epargne_totale(user) -> Decimal:
-    total = EpargnePersonnelle.objects.filter(hote=user).aggregate(
+    total = EpargnePersonnelle.objects.filter(
+        hote=user,
+        etat=EpargnePersonnelle.ETAT.ACTIF,
+    ).aggregate(
         total=Sum("montant_courant"),
     )["total"]
     return total or Decimal("0")

@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Svg, Circle } from 'react-native-svg';
 import { useSavingsGoals } from '@/modules/savings/hooks/useSavingsGoals';
+import { useArchivedSavingsGoals } from '@/modules/savings/hooks/useArchivedSavingsGoals';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
@@ -53,6 +54,11 @@ function GoalBar({ pct }: { pct: number }) {
 export default function SavingsListScreen() {
   const router = useRouter();
   const { goals, loading, error } = useSavingsGoals();
+  const {
+    goals: archivedGoals,
+    loading: loadingArchived,
+    error: archivedError,
+  } = useArchivedSavingsGoals();
 
   const totalSaved = goals.reduce((s, g) => s + g.saved, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
@@ -118,10 +124,7 @@ export default function SavingsListScreen() {
           </View>
         ) : null}
 
-        {goals.map((goal) => {
-          const pct =
-            goal.target > 0 ? Math.min(100, Math.round((goal.saved / goal.target) * 100)) : 0;
-          return (
+        {goals.map((goal) => (
             <AnimatedPressable
               key={goal.id}
               style={styles.goalCard}
@@ -131,24 +134,75 @@ export default function SavingsListScreen() {
             >
               <View style={styles.goalTop}>
                 <View style={styles.goalLeft}>
-                  <View style={styles.goalIcon}>
-                    <Feather name={goal.icon} size={22} color={Colors.success} />
+                  <View
+                    style={[
+                      styles.goalIcon,
+                      goal.withdrawn ? styles.goalIconCompleted : null,
+                    ]}
+                  >
+                    <Feather
+                      name={goal.withdrawn ? 'check-circle' : goal.icon}
+                      size={22}
+                      color={Colors.success}
+                    />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.goalName}>{goal.name}</Text>
-                    <Text style={styles.goalProgress}>
-                      {goal.saved.toLocaleString('fr-FR')} / {goal.target.toLocaleString('fr-FR')} F
-                    </Text>
+                    {goal.withdrawn ? (
+                      <Text style={styles.goalProgressCompleted}>
+                        Objectif atteint · épargne retirée
+                      </Text>
+                    ) : (
+                      <Text style={styles.goalProgress}>
+                        {goal.saved.toLocaleString('fr-FR')} /{' '}
+                        {goal.target.toLocaleString('fr-FR')} F
+                      </Text>
+                    )}
                   </View>
                 </View>
-                <MiniProgress percentage={pct} />
+                <MiniProgress percentage={goal.percentage} />
               </View>
-              <GoalBar pct={pct} />
+              <GoalBar pct={goal.percentage} />
             </AnimatedPressable>
-          );
-        })}
+          ))}
 
-        
+        {archivedGoals.length > 0 || loadingArchived ? (
+          <>
+            <Text style={[styles.sectionEyebrow, { marginTop: Theme.spacing.lg }]}>
+              Objectifs archivés
+            </Text>
+            {loadingArchived ? (
+              <ActivityIndicator color={Colors.gray[400]} style={styles.loader} />
+            ) : null}
+            {archivedError ? (
+              <Text style={styles.archivedError}>{archivedError}</Text>
+            ) : null}
+            {archivedGoals.map((goal) => (
+              <AnimatedPressable
+                key={`archived-${goal.id}`}
+                style={[styles.goalCard, styles.goalCardArchived]}
+                onPress={() =>
+                  router.push({ pathname: '/savings-detail', params: { id: goal.id } })
+                }
+              >
+                <View style={styles.goalTop}>
+                  <View style={styles.goalLeft}>
+                    <View style={[styles.goalIcon, styles.goalIconArchived]}>
+                      <Feather name="archive" size={20} color={Colors.gray[500]} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.goalName}>{goal.name}</Text>
+                      <Text style={styles.goalProgress}>
+                        Objectif : {goal.target.toLocaleString('fr-FR')} F
+                      </Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
+                </View>
+              </AnimatedPressable>
+            ))}
+          </>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -249,6 +303,14 @@ const styles = StyleSheet.create({
   },
   goalName: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 17, color: Colors.gray[900], marginBottom: 4 },
   goalProgress: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
+  goalProgressCompleted: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 13,
+    color: Colors.success,
+  },
+  goalIconCompleted: {
+    backgroundColor: withOpacity(Colors.success, 0.18),
+  },
   miniPct: {
     position: 'absolute',
     fontFamily: Fonts.spaceGrotesk.bold,
@@ -309,5 +371,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gray[600],
     lineHeight: 20,
+  },
+  goalCardArchived: {
+    opacity: 0.92,
+    backgroundColor: Colors.gray[50],
+  },
+  goalIconArchived: {
+    backgroundColor: Colors.gray[100],
+  },
+  archivedError: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.danger,
+    textAlign: 'center',
+    paddingHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
   },
 });

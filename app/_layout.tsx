@@ -71,6 +71,7 @@ export default function RootLayout() {
         <Stack.Screen name="prochaines-echeances" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="invitations" />
+        <Stack.Screen name="join-tontine-rules" />
         <Stack.Screen name="new-invitation" />
         <Stack.Screen name="activite/[id]" />
         <Stack.Screen name="add-to-savings" />

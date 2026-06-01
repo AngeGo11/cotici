@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,24 +13,14 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { publishOrdreRamassage as publishOrdreLocal } from '@/modules/tontine/data/tontinePhase';
+import { setOrdreRamassage } from '@/shared/api';
+import { useTontineDetail } from '@/modules/tontine/hooks/useTontineDetail';
 
 type OrdreMember = {
   id: string;
   name: string;
   avatar: string;
 };
-
-const DEMO_MEMBERS: OrdreMember[] = [
-  { id: '1', name: 'Kouassi Jean', avatar: 'KJ' },
-  { id: '2', name: 'Awa Diallo', avatar: 'AD' },
-  { id: '3', name: 'Amadou Bamba', avatar: 'AB' },
-  { id: '4', name: 'Sophie Traoré', avatar: 'ST' },
-  { id: '5', name: 'Moussa Keita', avatar: 'MK' },
-  { id: '6', name: 'Fatou Touré', avatar: 'FT' },
-  { id: '7', name: 'Jean Diabaté', avatar: 'JD' },
-  { id: '8', name: 'Marie Koné', avatar: 'MK' },
-];
 
 function reorder<T>(list: T[], from: number, to: number): T[] {
   if (to < 0 || to >= list.length || from === to) {
@@ -45,7 +35,8 @@ function reorder<T>(list: T[], from: number, to: number): T[] {
 export default function DefineOrdreRamassageScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tontineId?: string; tontineNom?: string; memberCount?: string }>();
-  const tontineId = typeof params.tontineId === 'string' ? params.tontineId : '2';
+  const tontineId = typeof params.tontineId === 'string' ? params.tontineId : undefined;
+  const { detail, loading } = useTontineDetail(tontineId);
 
   const tontineNom = useMemo(
     () =>
@@ -55,17 +46,21 @@ export default function DefineOrdreRamassageScreen() {
     [params.tontineNom],
   );
 
-  const memberCount = useMemo(() => {
-    const n = parseInt(params.memberCount ?? '', 10);
-    if (Number.isFinite(n) && n > 0 && n <= DEMO_MEMBERS.length) {
-      return n;
-    }
-    return DEMO_MEMBERS.length;
-  }, [params.memberCount]);
+  const [members, setMembers] = useState<OrdreMember[]>([]);
+  const [publishing, setPublishing] = useState(false);
 
-  const [members, setMembers] = useState<OrdreMember[]>(() =>
-    DEMO_MEMBERS.slice(0, memberCount),
-  );
+  useEffect(() => {
+    if (!detail?.membres?.length) return;
+    setMembers(
+      [...detail.membres]
+        .sort((a, b) => a.ordre_ramassage - b.ordre_ramassage)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          avatar: m.avatar,
+        })),
+    );
+  }, [detail?.membres]);
 
   const moveUp = useCallback((index: number) => {
     setMembers((prev) => reorder(prev, index, index - 1));
@@ -88,11 +83,24 @@ export default function DefineOrdreRamassageScreen() {
         {
           text: 'Publier',
           onPress: () => {
-            publishOrdreLocal(tontineId);
-            router.replace({
-              pathname: '/tontine-details',
-              params: { id: tontineId },
-            });
+            if (!tontineId) return;
+            void (async () => {
+              setPublishing(true);
+              const ordres = members.map((m, index) => ({
+                membre_id: parseInt(m.id, 10),
+                ordre_ramassage: index + 1,
+              }));
+              const result = await setOrdreRamassage(parseInt(tontineId, 10), ordres);
+              setPublishing(false);
+              if (!result.ok) {
+                Alert.alert('Erreur', result.detail);
+                return;
+              }
+              router.replace({
+                pathname: '/tontine-details',
+                params: { id: tontineId },
+              });
+            })();
           },
         },
       ],

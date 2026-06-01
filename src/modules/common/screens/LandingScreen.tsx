@@ -68,9 +68,7 @@ export default function WelcomeScreen() {
             En continuant, vous acceptez nos conditions d&apos;utilisation
           </Text>
         </AnimatedPressable>
-        <AnimatedPressable disableScale onPress={() => router.push('/(tabs)')}>
-          <Text style={styles.demoLink}>Accès rapide dashboard →</Text>
-        </AnimatedPressable>
+       
       </View>
     </SafeAreaView>
   );

@@ -53,9 +53,12 @@ export default function SavingsHistoryScreen() {
           <Text style={styles.sectionEyebrow}>Toutes les opérations</Text>
 
           {transactions.length === 0 ? (
-            <Text style={styles.emptyText}>Aucun versement pour le moment.</Text>
+            <Text style={styles.emptyText}>Aucune opération pour le moment.</Text>
           ) : (
-            transactions.map((tx) => (
+            transactions.map((tx) => {
+              const isWithdraw = tx.amount < 0;
+              const displayAmount = Math.abs(tx.amount);
+              return (
               <AnimatedPressable
                 key={tx.reference}
                 style={styles.row}
@@ -67,8 +70,17 @@ export default function SavingsHistoryScreen() {
                 }
               >
                 <View style={styles.rowLeft}>
-                  <View style={styles.contribIcon}>
-                    <Feather name="arrow-down-left" size={18} color={Colors.success} />
+                  <View
+                    style={[
+                      styles.contribIcon,
+                      isWithdraw && styles.contribIconWithdraw,
+                    ]}
+                  >
+                    <Feather
+                      name={isWithdraw ? 'arrow-up-right' : 'arrow-down-left'}
+                      size={18}
+                      color={isWithdraw ? Colors.brand : Colors.success}
+                    />
                   </View>
                   <View style={styles.rowTexts}>
                     <Text style={styles.type}>{tx.type}</Text>
@@ -78,11 +90,17 @@ export default function SavingsHistoryScreen() {
                   </View>
                 </View>
                 <View style={styles.rowRight}>
-                  <Text style={styles.amount}>+{tx.amount.toLocaleString('fr-FR')} F</Text>
+                  <Text
+                    style={[styles.amount, isWithdraw && styles.amountWithdraw]}
+                  >
+                    {isWithdraw ? '−' : '+'}
+                    {displayAmount.toLocaleString('fr-FR')} F
+                  </Text>
                   <Feather name="chevron-right" size={16} color={Colors.gray[400]} />
                 </View>
               </AnimatedPressable>
-            ))
+            );
+            })
           )}
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -161,7 +179,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  contribIconWithdraw: {
+    backgroundColor: withOpacity(Colors.brand, 0.1),
+  },
   type: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[900] },
   date: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500], marginTop: 2 },
   amount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: Colors.success },
+  amountWithdraw: { color: Colors.brand },
 });

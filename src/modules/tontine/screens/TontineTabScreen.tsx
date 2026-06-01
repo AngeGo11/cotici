@@ -1,9 +1,10 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,30 +12,50 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import {
-  getTontineListBadge,
-  getTontinesForList,
-  parseTurn,
-} from '@/modules/tontine/data/tontines';
-import { getTontinePhaseState } from '@/modules/tontine/data/tontinePhase';
-import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
+import { parseTurn } from '@/shared/api';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { fetchRecruitingTontines, fetchMyInvitations, tontineSummaryToUi } from '@/shared/api';
+import { useTontines, type TontineListItem } from '@/modules/tontine/hooks/useTontines';
 
 const statusLabel = {
   active: { text: 'Actif', color: Colors.success, bg: withOpacity(Colors.success, 0.12) },
   paused: { text: 'En pause', color: Colors.gray[500], bg: withOpacity(Colors.gray[500], 0.12) },
+  awaiting: { text: 'Ordre à définir', color: Colors.accent, bg: withOpacity(Colors.accent, 0.12) },
 };
 
 export default function TontineListScreen() {
   const router = useRouter();
-  useTontinePhase('2');
-  const tontines = getTontinesForList();
+  const { tontines, loading, error, reload } = useTontines();
+  const [recruiting, setRecruiting] = useState<TontineListItem[]>([]);
+  const [invitationsCount, setInvitationsCount] = useState(0);
+
+  const loadRecruiting = useCallback(async () => {
+    const result = await fetchRecruitingTontines();
+    if (result.ok) {
+      setRecruiting(result.data.results.map(tontineSummaryToUi));
+    }
+  }, []);
+
+  const loadInvitations = useCallback(async () => {
+    const result = await fetchMyInvitations();
+    if (result.ok) {
+      setInvitationsCount(result.data.length);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadRecruiting();
+      void loadInvitations();
+      void reload();
+    }, [loadRecruiting, loadInvitations, reload]),
+  );
 
   const totalCotisations = tontines.reduce((s, t) => s + t.amount, 0);
   const avgCyclePct =
     tontines.length > 0
-      ? Math.round(
-          tontines.reduce((s, t) => s + parseTurn(t.turn).pct, 0) / tontines.length,
-        )
+      ? Math.round(tontines.reduce((s, t) => s + t.turnPct, 0) / tontines.length)
       : 0;
 
   return (
@@ -47,13 +68,42 @@ export default function TontineListScreen() {
               Cotisez en groupe et suivez l&apos;avancement de chaque cycle
             </Text>
           </View>
-          <AnimatedPressable
-            style={styles.addButton}
-            onPress={() => router.push('/create-savings')}
-            accessibilityLabel="Créer une tontine ou un projet" >
-            <Feather name="plus" size={22} color={Colors.white} />
-          </AnimatedPressable>
+          <View style={styles.topActions}>
+            <AnimatedPressable
+              style={styles.iconButton}
+              onPress={() => router.push('/invitations')}
+              accessibilityLabel="Invitations reçues"
+            >
+              <Feather name="mail" size={20} color={Colors.brand} />
+              {invitationsCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{invitationsCount}</Text>
+                </View>
+              ) : null}
+            </AnimatedPressable>
+            
+          </View>
         </View>
+
+        {invitationsCount > 0 ? (
+          <AnimatedPressable
+            style={styles.inviteBanner}
+            onPress={() => router.push('/invitations')}
+          >
+            <View style={styles.inviteBannerIcon}>
+              <Feather name="user-plus" size={18} color={Colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inviteBannerTitle}>
+                {invitationsCount} invitation{invitationsCount > 1 ? 's' : ''} en attente
+              </Text>
+              <Text style={styles.inviteBannerText}>
+                Rejoignez les groupes auxquels vous êtes invité·e
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
+          </AnimatedPressable>
+        ) : null}
 
         <View style={styles.summaryHero}>
           <Text style={styles.summaryTag}>Vue d&apos;ensemble</Text>
@@ -63,7 +113,7 @@ export default function TontineListScreen() {
               <Text style={styles.summaryValue}>{tontines.length}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.summaryLabel}>Cotisations / mois</Text>
+              <Text style={styles.summaryLabel}>Pot cumulé / cycle</Text>
               <Text style={styles.summaryTarget}>{totalCotisations.toLocaleString('fr-FR')} F</Text>
             </View>
           </View>
@@ -75,33 +125,75 @@ export default function TontineListScreen() {
           </Text>
         </View>
 
+        {recruiting.length > 0 ? (
+          <>
+            <Text style={styles.sectionEyebrow}>En recrutement</Text>
+            {recruiting.map((tontine) => (
+              <AnimatedPressable
+                key={`rec-${tontine.id}`}
+                style={[styles.tontineCard, styles.recruitingCard]}
+                onPress={() =>
+                  router.push({ pathname: '/tontine-details', params: { id: tontine.id } })
+                }
+              >
+                <View style={styles.cardTop}>
+                  <View style={styles.cardIcon}>
+                    <Feather name="user-plus" size={22} color={Colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tontineName}>{tontine.name}</Text>
+                    <Text style={styles.tontineMembers}>
+                      {tontine.members}/{tontine.nombreMax} membres — invitez pour compléter
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
+                </View>
+              </AnimatedPressable>
+            ))}
+          </>
+        ) : null}
+
         <Text style={styles.sectionEyebrow}>Vos groupes</Text>
 
+        {loading ? <ActivityIndicator color={Colors.brand} style={styles.loader} /> : null}
+
+        {!loading && error ? (
+          <View style={styles.messageCard}>
+            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Text style={styles.messageText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {!loading && !error && tontines.length === 0 ? (
+          <View style={styles.messageCard}>
+            <Feather name="inbox" size={20} color={Colors.gray[500]} />
+            <Text style={styles.messageText}>
+              Aucune tontine de groupe pour le moment. Créez votre premier collectif.
+            </Text>
+          </View>
+        ) : null}
+
         {tontines.map((tontine) => {
-          const live = getTontinePhaseState(tontine.id);
-          const phase = live?.phase ?? tontine.phase;
-          const flowBadge = getTontineListBadge(tontine);
-          const status = tontine.status === 'paused' ? statusLabel.paused : flowBadge ?? statusLabel.active;
+          const flowBadge =
+            tontine.phase === 'awaiting_ordre'
+              ? statusLabel.awaiting
+              : tontine.status === 'paused'
+                ? statusLabel.paused
+                : statusLabel.active;
           let displayTurn = tontine.turn;
-          if (phase === 'active' && live?.ordrePublie && displayTurn.startsWith('0/')) {
+          if (tontine.phase === 'active' && tontine.ordrePublie && displayTurn.startsWith('0/')) {
             const { total } = parseTurn(displayTurn);
             displayTurn = `1/${total}`;
           }
           const { current, total, pct } = parseTurn(displayTurn);
-          const membresLabel = live
-            ? `${live.membresActifs}/${live.nombreMax} membres`
-            : `${tontine.members} membres`;
+          const membresLabel = `${tontine.members}/${tontine.nombreMax} membres`;
 
           return (
             <AnimatedPressable
               key={tontine.id}
               style={styles.tontineCard}
               onPress={() =>
-                router.push(
-                  tontine.isSolidarity
-                    ? '/solidarity'
-                    : { pathname: '/tontine-details', params: { id: tontine.id } },
-                )
+                router.push({ pathname: '/tontine-details', params: { id: tontine.id } })
               }
             >
               <View style={styles.cardTop}>
@@ -115,12 +207,14 @@ export default function TontineListScreen() {
                     <Text style={styles.tontineMembers}>{membresLabel}</Text>
                   </View>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                  <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: flowBadge.bg }]}>
+                  <Text style={[styles.statusText, { color: flowBadge.color }]}>
+                    {flowBadge.text}
+                  </Text>
                 </View>
               </View>
 
-              {phase === 'awaiting_ordre' ? (
+              {tontine.phase === 'awaiting_ordre' ? (
                 <View style={styles.awaitingBlock}>
                   <Feather name="list" size={16} color={Colors.accent} />
                   <Text style={styles.awaitingText}>
@@ -144,7 +238,9 @@ export default function TontineListScreen() {
               <View style={styles.cardBottom}>
                 <View>
                   <Text style={styles.detailLabel}>Cotisation</Text>
-                  <Text style={styles.detailValue}>{tontine.amount.toLocaleString('fr-FR')} F</Text>
+                  <Text style={styles.detailValue}>
+                    {tontine.cotisationAmount.toLocaleString('fr-FR')} F
+                  </Text>
                 </View>
                 <View style={styles.chevronWrap}>
                   <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
@@ -153,8 +249,6 @@ export default function TontineListScreen() {
             </AnimatedPressable>
           );
         })}
-
-        
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -187,6 +281,52 @@ const styles = StyleSheet.create({
     color: Colors.gray[600],
     lineHeight: 20,
   },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 },
+  iconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: withOpacity(Colors.brand, 0.12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: Theme.screen.bg,
+  },
+  badgeText: { fontFamily: Fonts.outfit.bold, fontSize: 10, color: Colors.white },
+  inviteBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: 14,
+    borderRadius: Theme.radius.md,
+    backgroundColor: withOpacity(Colors.brand, 0.08),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.18),
+  },
+  inviteBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: withOpacity(Colors.brand, 0.14),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteBannerTitle: { fontFamily: Fonts.outfit.semiBold, fontSize: 14, color: Colors.gray[900] },
+  inviteBannerText: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[600], marginTop: 2 },
   addButton: {
     width: 48,
     height: 48,
@@ -213,36 +353,32 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
     textTransform: 'uppercase',
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Theme.spacing.lg },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Theme.spacing.lg,
+  },
   summaryLabel: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 12,
     color: 'rgba(255,255,255,0.85)',
     marginBottom: 4,
   },
-  summaryValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 28, color: Colors.white },
+  summaryValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 26, color: Colors.white },
   summaryTarget: {
     fontFamily: Fonts.spaceGrotesk.bold,
-    fontSize: 22,
+    fontSize: 20,
     color: 'rgba(255,255,255,0.95)',
   },
   globalBarTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     overflow: 'hidden',
     marginBottom: Theme.spacing.sm,
   },
-  globalBarFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: Colors.white,
-  },
-  summaryHint: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.82)',
-  },
+  globalBarFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.white },
+  summaryHint: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: 'rgba(255,255,255,0.8)' },
   sectionEyebrow: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,
@@ -250,6 +386,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.md,
     letterSpacing: 0.2,
+  },
+  loader: { marginVertical: Theme.spacing.xl },
+  messageCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    ...Theme.shadow.soft,
+  },
+  messageText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[600],
+    lineHeight: 20,
   },
   tontineCard: {
     marginHorizontal: Theme.spacing.page,
@@ -261,7 +418,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray[100],
     ...Theme.shadow.card,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: Theme.spacing.md, marginBottom: Theme.spacing.lg },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
   cardIcon: {
     width: 48,
     height: 48,
@@ -274,22 +436,20 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.spaceGrotesk.bold,
     fontSize: 17,
     color: Colors.gray[900],
-    marginBottom: 6,
+    marginBottom: 4,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tontineMembers: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Theme.radius.pill },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   statusText: { fontFamily: Fonts.outfit.medium, fontSize: 11 },
   awaitingBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: Theme.spacing.lg,
-    padding: Theme.spacing.md,
+    gap: Theme.spacing.sm,
     backgroundColor: withOpacity(Colors.accent, 0.08),
-    borderRadius: Theme.radius.md,
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.accent, 0.2),
+    padding: Theme.spacing.md,
+    borderRadius: Theme.radius.sm,
+    marginBottom: Theme.spacing.md,
   },
   awaitingText: {
     flex: 1,
@@ -298,12 +458,11 @@ const styles = StyleSheet.create({
     color: Colors.gray[700],
     lineHeight: 18,
   },
-  turnBlock: { marginBottom: Theme.spacing.lg },
+  turnBlock: { marginBottom: Theme.spacing.md },
   turnHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   turnLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
   turnFraction: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.gray[700] },
@@ -313,40 +472,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray[100],
     overflow: 'hidden',
   },
-  turnFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: Colors.brand,
-  },
+  turnFill: { height: '100%', borderRadius: 3, backgroundColor: Colors.brand },
   cardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: Theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[100],
   },
-  detailLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500], marginBottom: 2 },
-  detailValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
-  chevronWrap: { justifyContent: 'center' },
-  createCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.md,
-    marginHorizontal: Theme.spacing.page,
-    marginTop: Theme.spacing.sm,
-    padding: Theme.spacing.lg,
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.brand, 0.22),
-    ...Theme.shadow.soft,
+  detailLabel: { fontFamily: Fonts.outfit.regular, fontSize: 11, color: Colors.gray[500], marginBottom: 2 },
+  detailValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: Colors.gray[900] },
+  chevronWrap: { padding: 4 },
+  recruitingCard: {
+    borderColor: withOpacity(Colors.accent, 0.35),
+    backgroundColor: withOpacity(Colors.accent, 0.04),
   },
-  createIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: Theme.radius.sm,
-    backgroundColor: withOpacity(Colors.brand, 0.1),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900], marginBottom: 2 },
-  createSubtitle: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
 });

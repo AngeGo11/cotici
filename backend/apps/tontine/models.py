@@ -42,7 +42,9 @@ class TontineMembre(models.Model):
     role_membre = models.CharField(choices=ROLE_MEMBRE.choices, max_length=50)
     statut_membre = models.CharField(choices=STATUT_MEMBRE.choices, max_length=50)
     date_adhesion = models.DateTimeField(auto_now_add=True)
-    ordre_ramassage = models.IntegerField()
+    ordre_ramassage = models.IntegerField()  # Ce membre sera le n-ième à être servi
+    regles_acceptees = models.BooleanField(default=False)
+    date_acceptation_regles = models.DateTimeField(null=True, blank=True)
 
 
     class Meta:
@@ -102,7 +104,16 @@ class TontineRegle(models.Model):
         ALEATOIRE = "ALÉATOIRE", _("Aléatoire")
 
     tontine = models.OneToOneField(Tontine, on_delete=models.CASCADE)
-    objectif_cotisation = models.DecimalField(max_digits=10, decimal_places=0)
+    objectif_cotisation = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        help_text="Montant total à atteindre pour le groupe.",
+    )
+    montant_cotisation = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        help_text="Mise versée par chaque participant à chaque tour.",
+    )
     montant_penalite = models.DecimalField(max_digits=10, decimal_places=0)
     nombre_max = models.IntegerField()
     ordre_ramassage = models.CharField(choices= ORDRE_RAMASSAGE.choices,default=ORDRE_RAMASSAGE.ALEATOIRE, max_length=25)

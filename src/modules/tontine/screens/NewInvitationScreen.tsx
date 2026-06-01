@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,8 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import {
-  buildOutgoingInvitation,
-  buildTontineInviteLink,
-  pushInvitation,
-} from '@/data/invitationStore';
+import { fetchTontineDetail, sendTontineInvitation } from '@/shared/api';
+import { buildTontineInviteLink } from '@/data/invitationStore';
 
 const DEFAULT_TONTINE_ID = 't1';
 const DEFAULT_TONTINE_NOM = 'Tontine Famille Solidaire';
@@ -95,8 +92,22 @@ export default function NewInvitationScreen() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
 
-  const inviteLink = useMemo(() => buildTontineInviteLink(tontineId), [tontineId]);
+  useEffect(() => {
+    void (async () => {
+      const result = await fetchTontineDetail(tontineId);
+      if (result.ok) {
+        setQrPayload(result.data.qr_code);
+      }
+    })();
+  }, [tontineId]);
+
+  const inviteLink = useMemo(
+    () => (qrPayload ? qrPayload : buildTontineInviteLink(tontineId)),
+    [qrPayload, tontineId],
+  );
   const canSubmit = name.trim().length >= 2 && phone.replace(/\D/g, '').length >= 8;
 
   const shareInviteLink = async () => {
@@ -123,14 +134,16 @@ export default function NewInvitationScreen() {
       return;
     }
     const numTel = normalizePhone(phone);
-    const inv = buildOutgoingInvitation({
-      inviteeName: name.trim(),
-      numTel,
-      tontineId,
-      tontineNom,
-    });
-    pushInvitation(inv);
-    router.back();
+    void (async () => {
+      setSubmitting(true);
+      const result = await sendTontineInvitation(parseInt(tontineId, 10), numTel);
+      setSubmitting(false);
+      if (!result.ok) {
+        setError(result.detail);
+        return;
+      }
+      router.back();
+    })();
   };
 
   return (
