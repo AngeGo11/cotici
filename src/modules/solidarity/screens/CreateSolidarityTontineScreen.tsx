@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { 
+import {
   View,
   Text,
   TextInput,
   ScrollView,
   StyleSheet,
- } from 'react-native';
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,18 +15,64 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { createSolidarityTontine } from '@/shared/api/solidarityApi';
 
-const solidarityReasons = ['Maladie', 'Décès', 'Mariage', 'Naissance', 'Études', 'Autre'] as const;
+const solidarityReasons = ['Maladie',  'Mariage', 'Décès', 'Études'] as const;
+
+function parsePositiveInt(text: string): number | null {
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return null;
+  const n = parseInt(digits, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export default function CreateSolidarityTontineScreen() {
   const router = useRouter();
   const [beneficiaryPhone, setBeneficiaryPhone] = useState('');
   const [reason, setReason] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
-  const [contributionAmount, setContributionAmount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const participants =
-    targetAmount && contributionAmount ? Math.ceil(Number(targetAmount) / Number(contributionAmount)) : 0;
+  const handleCreate = () => {
+    const beneficiaire = beneficiaryPhone.trim();
+    const motif = reason.trim();
+    const objectif = parsePositiveInt(targetAmount);
+
+    if (!beneficiaire) {
+      Alert.alert('Champ requis', 'Indiquez le numéro Cotici du bénéficiaire.');
+      return;
+    }
+    if (!motif) {
+      Alert.alert('Champ requis', 'Indiquez le motif de la collecte.');
+      return;
+    }
+    if (objectif === null) {
+      Alert.alert('Montant invalide', 'Indiquez un objectif de collecte valide.');
+      return;
+    }
+
+    void (async () => {
+      setSubmitting(true);
+      const result = await createSolidarityTontine({
+        beneficiaire,
+        motif,
+        objectif_collecte: objectif,
+      });
+      setSubmitting(false);
+      if (!result.ok) {
+        Alert.alert('Erreur', result.detail);
+        return;
+      }
+      router.replace({
+        pathname: '/solidarity-share',
+        params: {
+          id: String(result.data.id),
+          motif,
+          objectif: String(objectif),
+        },
+      });
+    })();
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -128,28 +176,20 @@ export default function CreateSolidarityTontineScreen() {
         </View>
 
 
-        {participants > 0 && (
-          <View style={styles.previewCard}>
-            <View style={styles.previewRow}>
-              <View>
-                <Text style={styles.previewLabel}>Participants nécessaires (estimé)</Text>
-                <Text style={styles.previewValue}>{participants}</Text>
-              </View>
-              <View style={styles.previewIcon}>
-                <Feather name="users" size={26} color={Colors.brand} />
-              </View>
-            </View>
-            <Text style={styles.previewSub}>Basé sur l&apos;objectif et la mise par personne</Text>
-          </View>
-        )}
-
         <AnimatedPressable
-          style={styles.createButton}
-          onPress={() => router.push({ pathname: '/success', params: { type: 'create-solidarity' } })} >
-          <Feather name="heart" size={20} color={Colors.white} />
-          <Text style={styles.createButtonText}>Créer le groupe de soutien</Text>
+          style={[styles.createButton, submitting && styles.createButtonDisabled]}
+          disabled={submitting}
+          onPress={handleCreate} >
+          {submitting ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <>
+              <Feather name="heart" size={20} color={Colors.white} />
+              <Text style={styles.createButtonText}>Créer le groupe de soutien</Text>
+            </>
+          )}
         </AnimatedPressable>
-        <Text style={styles.footerNote}>Vous pourrez inviter les participants après la création via un lien d'invitation.</Text>
+        <Text style={styles.footerNote}>Vous pourrez partager le lien de contribution dès la prochaine étape.</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -364,6 +404,7 @@ const styles = StyleSheet.create({
     borderRadius: Theme.radius.md,
     ...Theme.shadow.soft,
   },
+  createButtonDisabled: { opacity: 0.7 },
   createButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 17, color: Colors.white },
   footerNote: {
     fontFamily: Fonts.outfit.regular,

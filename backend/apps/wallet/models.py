@@ -37,6 +37,8 @@ class Transaction(models.Model):
         VERSEMENT_EPARGNE_PERSONNELLE = "VERSEMENT_EPARGNE_PERSONNELLE", _("Versement épargne personnelle")
         RETRAIT_EPARGNE_PERSONNELLE = "RETRAIT_EPARGNE_PERSONNELLE", _("Retrait épargne personnelle")
         DEBIT = "DÉBIT", _("Débit")
+        CONTRIBUTION_SOLIDAIRE = "CONTRIBUTION_SOLIDAIRE", _("Contribution solidaire")
+        VERSEMENT_SOLIDAIRE = "VERSEMENT_SOLIDAIRE", _("Versement solidaire")
 
     tontine = models.ForeignKey(Tontine, on_delete=models.CASCADE, null=True, blank=True)
     epargne = models.ForeignKey(EpargnePersonnelle, on_delete=models.CASCADE, null=True, blank=True)
@@ -87,6 +89,18 @@ class Transaction(models.Model):
                         type_transaction="DÉBIT",
                         tontine__isnull=False,
                         tour__isnull=False,
+                        epargne__isnull=True,
+                    )
+                    | models.Q(
+                        type_transaction="CONTRIBUTION_SOLIDAIRE",
+                        tontine__isnull=False,
+                        tour__isnull=True,
+                        epargne__isnull=True,
+                    )
+                    | models.Q(
+                        type_transaction="VERSEMENT_SOLIDAIRE",
+                        tontine__isnull=False,
+                        tour__isnull=True,
                         epargne__isnull=True,
                     )
                 ),
@@ -147,6 +161,16 @@ class Transaction(models.Model):
             if self.epargne_id:
                 raise ValidationError(
                     {"epargne": _("Un débit ne doit pas référencer l’épargne personnelle.")}
+                )
+
+        elif tt in (T.CONTRIBUTION_SOLIDAIRE, T.VERSEMENT_SOLIDAIRE):
+            if not self.tontine_id:
+                raise ValidationError(
+                    {"tontine": _("Une opération solidaire doit référencer la collecte.")}
+                )
+            if self.tour_id or self.epargne_id:
+                raise ValidationError(
+                    _("Une opération solidaire ne doit pas référencer de tour ni d’épargne.")
                 )
 
     def save(self, *args, **kwargs):

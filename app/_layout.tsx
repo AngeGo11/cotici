@@ -60,6 +60,8 @@ export default function RootLayout() {
         <Stack.Screen name="create-savings" />
         <Stack.Screen name="create-classic-tontine" />
         <Stack.Screen name="create-solidarity-tontine" />
+        <Stack.Screen name="solidarity-share" />
+        <Stack.Screen name="solidarity-collect/[id]" />
         <Stack.Screen name="create-personal-goal" />
         <Stack.Screen name="modifier-objectif" />
         <Stack.Screen name="create-association-fund" />

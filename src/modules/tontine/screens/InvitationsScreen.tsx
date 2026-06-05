@@ -33,8 +33,16 @@ function formatAmount(n: number): string {
   return `${n.toLocaleString('fr-FR')} F`;
 }
 
-/** Extrait un token d'invitation depuis un code brut ou un lien collé. */
-function extractToken(raw: string): string {
+/** Extrait l'id d'une collecte solidaire depuis un lien explicite. */
+function extractSolidarityCollectId(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/solidarity-collect\/(\d+)/i);
+  return match?.[1] ?? null;
+}
+
+/** Extrait un token d'invitation groupe depuis un code brut ou un lien collé. */
+function extractGroupToken(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
   if (trimmed.includes('/')) {
@@ -116,12 +124,28 @@ export default function InvitationsScreen() {
   );
 
   const joinByCode = useCallback(() => {
-    const token = extractToken(joinCode);
-    if (!token) {
-      Alert.alert('Code requis', 'Collez le code ou le lien d\u2019invitation reçu.');
+    const raw = joinCode.trim();
+    if (!raw) {
+      Alert.alert('Code requis', 'Collez le code ou le lien reçu.');
       return;
     }
+
+    const solidarityId = extractSolidarityCollectId(raw);
     setJoinCode('');
+
+    if (solidarityId) {
+      router.push({
+        pathname: '/solidarity-collect/[id]',
+        params: { id: solidarityId },
+      });
+      return;
+    }
+
+    const token = extractGroupToken(raw);
+    if (!token) {
+      Alert.alert('Code requis', 'Collez le code ou le lien reçu.');
+      return;
+    }
     router.push({ pathname: '/join-tontine-rules', params: { token } });
   }, [joinCode, router]);
 
@@ -137,19 +161,19 @@ export default function InvitationsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Text style={styles.subtitle}>
-          Rejoignez les tontines de groupe auxquelles vous avez été invité·e.
+          Accédez à une tontine de groupe ou à une collecte solidaire via un lien ou un code.
         </Text>
 
         <View style={styles.joinCard}>
           <Text style={styles.joinTitle}>Rejoindre avec un code</Text>
           <Text style={styles.joinHint}>
-            Collez le code ou le lien d&apos;invitation reçu par SMS.
+            Collez le lien ou le code reçu (invitation SMS, collecte solidaire…).
           </Text>
           <View style={styles.joinRow}>
             <TextInput
               value={joinCode}
               onChangeText={setJoinCode}
-              placeholder="Code ou lien d'invitation"
+              placeholder="Lien ou code d'invitation"
               placeholderTextColor={Colors.gray[400]}
               style={styles.joinInput}
               autoCapitalize="none"

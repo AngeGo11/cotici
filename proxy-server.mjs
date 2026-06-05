@@ -277,6 +277,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+    if (req.method === "POST" && req.url === "/api/solidarity/cotiser/") {
+      await proxyToDjango(req, res, {
+        upstreamPath: "/api/solidarity/cotiser/",
+        forwardBearer: true,
+      });
+      return;
+    }
+
+  if (req.method === "GET" && req.url === "/api/solidarity/mine/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/solidarity/mine/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/solidarity/contributions/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/solidarity/contributions/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const solidarityPreviewMatch = req.url.match(/^\/api\/solidarity\/(\d+)\/preview\/?(?:\?.*)?$/);
+  if (req.method === "GET" && solidarityPreviewMatch) {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/solidarity/${solidarityPreviewMatch[1]}/preview/`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const solidarityVerserMatch = req.url.match(/^\/api\/solidarity\/(\d+)\/verser\/?(?:\?.*)?$/);
+  if (req.method === "POST" && solidarityVerserMatch) {
+    await proxyToDjango(req, res, {
+      upstreamPath: `/api/solidarity/${solidarityVerserMatch[1]}/verser/`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  
   if (req.method === "GET" && req.url === "/api/savings/") {
     await proxyToDjango(req, res, {
       method: "GET",

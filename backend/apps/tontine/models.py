@@ -26,6 +26,7 @@ class Tontine(models.Model):
 
 
 
+
 class TontineMembre(models.Model):
 
     class ROLE_MEMBRE(models.TextChoices):

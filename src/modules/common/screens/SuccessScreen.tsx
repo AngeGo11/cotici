@@ -88,12 +88,31 @@ const configs: Record<string, { icon: keyof typeof Feather.glyphMap; color: stri
     buttonLabel: 'Retour',
     buttonRoute: '/(tabs)',
   },
+  'solidarity-contribution': {
+    icon: 'heart',
+    color: Colors.brand,
+    title: 'Merci pour votre soutien !',
+    subtitle: 'Votre participation a été enregistrée avec succès.',
+    buttonLabel: 'Voir la collecte',
+    buttonRoute: '/solidarity-collect/[id]',
+  },
 };
 
 export default function SuccessScreen() {
   const router = useRouter();
-  const { type } = useLocalSearchParams<{ type: string }>();
+  const { type, collectId } = useLocalSearchParams<{ type: string; collectId?: string }>();
   const config = configs[type ?? ''] ?? configs.deposit;
+
+  const handlePrimary = () => {
+    if (type === 'solidarity-contribution' && typeof collectId === 'string' && collectId) {
+      router.replace({
+        pathname: '/solidarity-collect/[id]',
+        params: { id: collectId },
+      });
+      return;
+    }
+    router.replace(config.buttonRoute as '/(tabs)');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -108,7 +127,7 @@ export default function SuccessScreen() {
       <View style={styles.bottom}>
         <AnimatedPressable
           style={[styles.primaryButton, { backgroundColor: config.color }]}
-          onPress={() => router.replace(config.buttonRoute as any)}
+          onPress={handlePrimary}
         >
           <Text style={styles.primaryButtonText}>{config.buttonLabel}</Text>
         </AnimatedPressable>

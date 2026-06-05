@@ -18,6 +18,7 @@ from apps.utils.utilitaires import (
     _parse_positive_decimal,
     _unique_ref,
     _resolve_payment_mode,
+    _get_tontine_for_member,
 )
 
 from apps.tontine.models import (
@@ -46,7 +47,6 @@ from apps.tontine.helpers import (
     serialize_tontine_detail,
     serialize_tontine_summary,
     tour_en_cours,
-    user_is_active_member,
 )
 from apps.tontine.permissions import user_is_tontine_admin
 from apps.wallet.models import Transaction, Wallet
@@ -792,17 +792,6 @@ def send_invitation(request):
         status=status.HTTP_201_CREATED,
     )
 
-
-def _get_tontine_for_member(user, tontine_id, *, type_filter=None):
-    try:
-        tontine = Tontine.objects.get(pk=tontine_id)
-    except (Tontine.DoesNotExist, ValueError, TypeError):
-        return None, Response({"detail": "Tontine introuvable."}, status=status.HTTP_404_NOT_FOUND)
-    if type_filter and tontine.type_tontine != type_filter:
-        return None, Response({"detail": "Type de tontine incorrect."}, status=status.HTTP_400_BAD_REQUEST)
-    if not user_is_active_member(user, tontine) and not user_is_tontine_admin(user, tontine):
-        return None, Response({"detail": "Accès refusé."}, status=status.HTTP_403_FORBIDDEN)
-    return tontine, None
 
 
 @api_view(["GET"])

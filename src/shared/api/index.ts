@@ -66,3 +66,19 @@ export {
   type DefineTontineReglesParams,
   type ChangerTourResponse,
 } from './tontineApi';
+export {
+  createSolidarityTontine,
+  cotiserSolidarityTontine,
+  fetchSolidarityPreview,
+  fetchMySolidarityCollects,
+  fetchMySolidarityContributions,
+  verserSolidarityCollect,
+  buildSolidarityCollectLink,
+  parseSolidarityCollectId,
+  type CreateSolidarityTontineParams,
+  type CreateSolidarityTontineResponse,
+  type SolidarityCollectPreview,
+  type CotiserSolidarityParams,
+  type CotiserSolidarityResponse,
+  type VerserSolidarityResponse,
+} from './solidarityApi';

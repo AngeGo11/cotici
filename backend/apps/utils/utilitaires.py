@@ -1,9 +1,17 @@
 import re
 import secrets
 
+from rest_framework import status
+from rest_framework.response import Response
+
+from apps.tontine.models import Tontine
+from apps.tontine.permissions import user_is_tontine_admin
 from apps.wallet.models import Transaction, Wallet
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
+
+from apps.tontine.helpers import user_is_active_member
+
 
 def _parse_amount(value):
     if value in (None, ""):
@@ -64,3 +72,17 @@ def _generate_qr_payload(tontine_id: int) -> str:
     suffix = secrets.token_urlsafe(48)
     raw = f"cotici:tontine:{tontine_id}:{suffix}"
     return raw[:500]
+
+
+
+def _get_tontine_for_member(user, tontine_id, *, type_filter=None):
+    try:
+        tontine = Tontine.objects.get(pk=tontine_id)
+    except (Tontine.DoesNotExist, ValueError, TypeError):
+        return None, Response({"detail": "Tontine introuvable."}, status=status.HTTP_404_NOT_FOUND)
+    if type_filter and tontine.type_tontine != type_filter:
+        return None, Response({"detail": "Type de tontine incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+    if not user_is_active_member(user, tontine) and not user_is_tontine_admin(user, tontine):
+        return None, Response({"detail": "Accès refusé."}, status=status.HTTP_403_FORBIDDEN)
+    return tontine, None
+

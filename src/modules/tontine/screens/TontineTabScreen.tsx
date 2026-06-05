@@ -16,6 +16,11 @@ import { parseTurn } from '@/shared/api';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { fetchRecruitingTontines, fetchMyInvitations, tontineSummaryToUi } from '@/shared/api';
+import {
+  fetchMySolidarityCollects,
+  fetchMySolidarityContributions,
+  type SolidarityCollectPreview,
+} from '@/shared/api/solidarityApi';
 import { useTontines, type TontineListItem } from '@/modules/tontine/hooks/useTontines';
 
 const statusLabel = {
@@ -25,11 +30,92 @@ const statusLabel = {
   awaiting: { text: 'Ordre à définir', color: Colors.accent, bg: withOpacity(Colors.accent, 0.12) },
 };
 
+function solidarityStatus(collect: SolidarityCollectPreview) {
+  if (collect.versement_effectue) {
+    return { text: 'Versement effectué', color: Colors.success, bg: withOpacity(Colors.success, 0.12) };
+  }
+  if (collect.objectif_atteint) {
+    return { text: 'Objectif atteint', color: Colors.brand, bg: withOpacity(Colors.brand, 0.12) };
+  }
+  if (collect.est_active) {
+    return { text: 'En cours', color: Colors.info, bg: withOpacity(Colors.info, 0.12) };
+  }
+  return { text: 'Clôturée', color: Colors.gray[500], bg: withOpacity(Colors.gray[500], 0.12) };
+}
+
+function formatFcfa(n: number): string {
+  return `${n.toLocaleString('fr-FR')} F`;
+}
+
+function SolidarityCollectCard({
+  collect,
+  contributionAmount,
+  onPress,
+}: {
+  collect: SolidarityCollectPreview;
+  contributionAmount?: number;
+  onPress: () => void;
+}) {
+  const badge = solidarityStatus(collect);
+
+  return (
+    <AnimatedPressable style={styles.tontineCard} onPress={onPress}>
+      <View style={styles.cardTop}>
+        <View style={[styles.cardIcon, styles.solidarityIcon]}>
+          <Feather name="heart" size={22} color={Colors.brand} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.tontineName} numberOfLines={2}>{collect.motif}</Text>
+          <View style={styles.metaRow}>
+            <Feather name="user" size={13} color={Colors.gray[500]} />
+            <Text style={styles.tontineMembers}>
+              {collect.est_organisateur
+                ? `Organisée par vous · ${collect.nb_contributeurs} contributeur${collect.nb_contributeurs > 1 ? 's' : ''}`
+                : `Par ${collect.organisateur_nom}`}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.statusText, { color: badge.color }]}>{badge.text}</Text>
+        </View>
+      </View>
+
+      <View style={styles.turnBlock}>
+        <View style={styles.turnHeader}>
+          <Text style={styles.turnLabel}>Collecte</Text>
+          <Text style={styles.turnFraction}>{collect.progression_pct}%</Text>
+        </View>
+        <View style={styles.turnTrack}>
+          <View style={[styles.turnFill, { width: `${collect.progression_pct}%` }]} />
+        </View>
+      </View>
+
+      <View style={styles.cardBottom}>
+        <View>
+          <Text style={styles.detailLabel}>
+            {contributionAmount != null ? 'Votre participation' : 'Collecté / objectif'}
+          </Text>
+          <Text style={styles.detailValue}>
+            {contributionAmount != null
+              ? formatFcfa(contributionAmount)
+              : `${formatFcfa(collect.montant_collecte)} / ${formatFcfa(collect.objectif_collecte)}`}
+          </Text>
+        </View>
+        <View style={styles.chevronWrap}>
+          <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 export default function TontineListScreen() {
   const router = useRouter();
   const { tontines, loading, error, reload } = useTontines();
   const [recruiting, setRecruiting] = useState<TontineListItem[]>([]);
   const [invitationsCount, setInvitationsCount] = useState(0);
+  const [organizedCollects, setOrganizedCollects] = useState<SolidarityCollectPreview[]>([]);
+  const [contributedCollects, setContributedCollects] = useState<SolidarityCollectPreview[]>([]);
 
   const loadRecruiting = useCallback(async () => {
     const result = await fetchRecruitingTontines();
@@ -45,12 +131,32 @@ export default function TontineListScreen() {
     }
   }, []);
 
+  const loadSolidarity = useCallback(async () => {
+    const [organized, contributed] = await Promise.all([
+      fetchMySolidarityCollects(),
+      fetchMySolidarityContributions(),
+    ]);
+    if (organized.ok) setOrganizedCollects(organized.data);
+    if (contributed.ok) setContributedCollects(contributed.data);
+  }, []);
+
+  const openSolidarityCollect = useCallback(
+    (id: number) => {
+      router.push({
+        pathname: '/solidarity-collect/[id]',
+        params: { id: String(id) },
+      });
+    },
+    [router],
+  );
+
   useFocusEffect(
     useCallback(() => {
       void loadRecruiting();
       void loadInvitations();
+      void loadSolidarity();
       void reload();
-    }, [loadRecruiting, loadInvitations, reload]),
+    }, [loadRecruiting, loadInvitations, loadSolidarity, reload]),
   );
 
   const activeTontines = tontines.filter((t) => t.phase !== 'completed');
@@ -67,7 +173,7 @@ export default function TontineListScreen() {
           <View style={styles.titleBlock}>
             <Text style={styles.pageTitle}>Mes tontines</Text>
             <Text style={styles.pageSubtitle}>
-              Cotisez en groupe et suivez l&apos;avancement de chaque cycle
+              Tontines de groupe et collectes solidaires
             </Text>
           </View>
           <View style={styles.topActions}>
@@ -264,6 +370,33 @@ export default function TontineListScreen() {
           );
         })}
 
+        {organizedCollects.length > 0 ? (
+          <>
+            <Text style={styles.sectionEyebrow}>Collectes solidaires organisées</Text>
+            {organizedCollects.map((collect) => (
+              <SolidarityCollectCard
+                key={`org-${collect.id}`}
+                collect={collect}
+                onPress={() => openSolidarityCollect(collect.id)}
+              />
+            ))}
+          </>
+        ) : null}
+
+        {contributedCollects.length > 0 ? (
+          <>
+            <Text style={styles.sectionEyebrow}>Mes participations solidaires</Text>
+            {contributedCollects.map((collect) => (
+              <SolidarityCollectCard
+                key={`contrib-${collect.id}`}
+                collect={collect}
+                contributionAmount={collect.montant_contribue}
+                onPress={() => openSolidarityCollect(collect.id)}
+              />
+            ))}
+          </>
+        ) : null}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -445,6 +578,9 @@ const styles = StyleSheet.create({
     backgroundColor: withOpacity(Colors.brand, 0.12),
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  solidarityIcon: {
+    backgroundColor: withOpacity(Colors.brand, 0.14),
   },
   tontineName: {
     fontFamily: Fonts.spaceGrotesk.bold,
