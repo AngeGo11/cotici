@@ -27,7 +27,6 @@ export default function CreateClassicTontineScreen() {
   const router = useRouter();
   const [groupName, setGroupName] = useState('');
   const [maxMembers, setMaxMembers] = useState('');
-  const [cotisationGoal, setCotisationGoal] = useState('');
   const [participantAmount, setParticipantAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('monthly');
@@ -38,10 +37,6 @@ export default function CreateClassicTontineScreen() {
   const [penaltyType, setPenaltyType] = useState<'retard' | 'absence'>('retard');
   const [penaltyAmount, setPenaltyAmount] = useState('2000');
 
-  const cotisationGoalNum = useMemo(
-    () => parseInt(cotisationGoal.replace(/\s/g, ''), 10),
-    [cotisationGoal],
-  );
   const participantAmountNum = useMemo(
     () => parseInt(participantAmount.replace(/\s/g, ''), 10),
     [participantAmount],
@@ -50,11 +45,11 @@ export default function CreateClassicTontineScreen() {
     () => parseInt(maxMembers.replace(/\s/g, ''), 10),
     [maxMembers],
   );
+  const membersReady = Number.isFinite(maxMembersNum) && maxMembersNum >= 2;
   const potPerTour =
     Number.isFinite(participantAmountNum) &&
     participantAmountNum > 0 &&
-    Number.isFinite(maxMembersNum) &&
-    maxMembersNum >= 2
+    membersReady
       ? participantAmountNum * maxMembersNum
       : null;
 
@@ -64,31 +59,12 @@ export default function CreateClassicTontineScreen() {
     return parseInt(digits, 10).toLocaleString('fr-FR');
   };
 
-  const suggestedObjectif =
-    potPerTour !== null && Number.isFinite(maxMembersNum) && maxMembersNum >= 2
-      ? potPerTour * maxMembersNum
-      : null;
-
-  const computedTours =
-    potPerTour !== null &&
-    cotisationGoalNum > 0 &&
-    Number.isFinite(cotisationGoalNum) &&
-    Number.isFinite(maxMembersNum) &&
-    maxMembersNum >= 2
-      ? Math.max(1, Math.ceil(cotisationGoalNum / potPerTour))
-      : null;
-
   const handleCreate = () => {
     const nom = groupName.trim();
-    const objectifTotal = cotisationGoalNum;
     const montantParticipant = participantAmountNum;
     const max = maxMembersNum;
     if (!nom) {
       Alert.alert('Champ requis', 'Indiquez le nom du groupe.');
-      return;
-    }
-    if (!Number.isFinite(objectifTotal) || objectifTotal <= 0) {
-      Alert.alert('Objectif invalide', "Indiquez l'objectif de cotisation (montant total).");
       return;
     }
     if (!Number.isFinite(montantParticipant) || montantParticipant <= 0) {
@@ -121,7 +97,6 @@ export default function CreateClassicTontineScreen() {
 
       const reglesPayload: Parameters<typeof defineTontineRegles>[0] = {
         tontine_id: created.data.id,
-        objectif_cotisation: objectifTotal,
         montant_cotisation: montantParticipant,
         nombre_max: max,
         frequence: mapFrequencyToApi(frequency),
@@ -207,36 +182,8 @@ export default function CreateClassicTontineScreen() {
             keyboardType="number-pad"
           />
           <Text style={styles.helperText}>
-            Vous comptez parmi les participants (1 place pour vous).
+            Vous y compris.
           </Text>
-        </View>
-
-        <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Objectif de cotisation</Text>
-          <View style={styles.inputWithUnit}>
-            <TextInput
-              style={styles.inputField}
-              value={cotisationGoal}
-              onChangeText={(text) => setCotisationGoal(formatAmountInput(text))}
-              placeholder="500 000"
-              placeholderTextColor={Colors.gray[400]}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.unit}>FCFA</Text>
-          </View>
-          <Text style={styles.helperText}>
-            Montant total que le groupe vise à atteindre pour le projet.
-          </Text>
-          {suggestedObjectif !== null && !cotisationGoal.trim() ? (
-            <AnimatedPressable
-              style={styles.suggestLink}
-              onPress={() => setCotisationGoal(suggestedObjectif.toLocaleString('fr-FR'))}
-            >
-              <Text style={styles.suggestLinkText}>
-                Suggestion : {suggestedObjectif.toLocaleString('fr-FR')} FCFA ({maxMembersNum} tours × pot par tour)
-              </Text>
-            </AnimatedPressable>
-          ) : null}
         </View>
 
         <View style={styles.fieldBlock}>
@@ -258,20 +205,28 @@ export default function CreateClassicTontineScreen() {
           {potPerTour !== null ? (
             <View style={styles.potSummary}>
               <Feather name="info" size={14} color={Colors.brand} />
-              <Text style={styles.potSummaryText}>
-                Pot par tour :{' '}
-                <Text style={styles.potSummaryValue}>
-                  {potPerTour.toLocaleString('fr-FR')} FCFA
+              <View style={styles.potSummaryContent}>
+                <Text style={styles.potSummaryText}>
+                  Pot par tour :{' '}
+                  <Text style={styles.potSummaryValue}>
+                    {potPerTour.toLocaleString('fr-FR')} FCFA
+                  </Text>
+                  {' '}
+                  ({participantAmountNum.toLocaleString('fr-FR')} × {maxMembersNum} membres)
                 </Text>
-                {' '}
-                ({participantAmountNum.toLocaleString('fr-FR')} × {maxMembersNum} membres)
-              </Text>
-              {computedTours !== null ? (
-                <Text style={[styles.potSummaryText, { marginTop: 6 }]}>
-                  Nombre de tours (calculé) :{' '}
-                  <Text style={styles.potSummaryValue}>{computedTours}</Text>
+                <Text style={[styles.potSummaryText, styles.potSummaryLine]}>
+                  Montant reçu par bénéficiaire :{' '}
+                  <Text style={styles.potSummaryValue}>
+                    {potPerTour.toLocaleString('fr-FR')} FCFA
+                  </Text>
                 </Text>
-              ) : null}
+                <Text style={[styles.potSummaryText, styles.potSummaryLine]}>
+                  Nombre de tours :{' '}
+                  <Text style={styles.potSummaryValue}>{maxMembersNum}</Text>
+                  {' '}
+                  (1 cycle complet)
+                </Text>
+              </View>
             </View>
           ) : null}
         </View>
@@ -557,25 +512,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: withOpacity(Colors.brand, 0.15),
   },
-  potSummaryText: {
+  potSummaryContent: {
     flex: 1,
+  },
+  potSummaryText: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 13,
     color: Colors.gray[700],
     lineHeight: 18,
   },
+  potSummaryLine: {
+    marginTop: 6,
+  },
   potSummaryValue: {
     fontFamily: Fonts.outfit.semiBold,
-    color: Colors.brand,
-  },
-  suggestLink: {
-    marginTop: 8,
-    marginHorizontal: Theme.spacing.page,
-    paddingVertical: 6,
-  },
-  suggestLinkText: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 12,
     color: Colors.brand,
   },
   advancedCard: {

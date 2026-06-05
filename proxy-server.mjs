@@ -269,6 +269,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && req.url === "/api/solidarity/create/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/solidarity/create/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "GET" && req.url === "/api/savings/") {
     await proxyToDjango(req, res, {
       method: "GET",

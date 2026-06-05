@@ -46,7 +46,7 @@ function memberBadgeConfig(
       };
     case 'beneficiary':
       return {
-        label: `Bénéficiaire · tour ${turn}`,
+        label: `Bénéficiaire du tour`,
         color: Colors.brand,
         bg: withOpacity(Colors.brand, 0.1),
       };
@@ -91,19 +91,20 @@ export default function TontineDetailsScreen() {
 
   const tontineName = detail.nom;
   const cotisationAmount = detail.cotisation_amount;
-  const objectifTotal =
-    detail.objectif_total > 0
-      ? detail.objectif_total
-      : parseInt(detail.regles?.objectif_cotisation ?? '0', 10) || 0;
   const nombreMax = detail.nombre_max;
   const membresActifs = detail.membres_actifs;
+  const potParTour =
+    parseInt(detail.pot_attendu ?? '0', 10) ||
+    detail.amount ||
+    (cotisationAmount > 0 && nombreMax > 0 ? cotisationAmount * nombreMax : 0);
 
   const isHost = user?.id != null && detail.hote_id === user.id;
 
+  const isCompleted = detail.phase === 'completed' || detail.cycle_termine;
   const isRecruiting = detail.phase === 'recruiting';
   const isAwaitingOrdre = detail.phase === 'awaiting_ordre';
   const awaitingOrdre = isAwaitingOrdre && detail.is_admin;
-  const hasTour = Boolean(detail.tour_courant);
+  const hasTour = Boolean(detail.tour_courant) && !isCompleted;
   const showMemberBadges = detail.phase === 'active' && hasTour;
   const isActive = detail.phase === 'active' && (hasTour || detail.ordre_publie);
 
@@ -114,7 +115,12 @@ export default function TontineDetailsScreen() {
 
   const turnStr = detail.turn;
   const { current: currentTour, total: totalTours } = parseTurn(turnStr);
-  const tourProgress = hasTour ? Math.min(currentTour / Math.max(totalTours, 1), 1) : 0;
+  const displayCurrentTour = isCompleted ? totalTours : currentTour;
+  const tourProgress = isCompleted
+    ? 1
+    : hasTour
+      ? Math.min(currentTour / Math.max(totalTours, 1), 1)
+      : 0;
 
   const myMembership = members.find((m) => m.user_id === user?.id);
   const canPay = Boolean(
@@ -126,7 +132,7 @@ export default function TontineDetailsScreen() {
     !hasTour &&
     detail.phase === 'active' &&
     membresActifs >= nombreMax;
-  const canInvite = detail.is_admin && membresActifs < nombreMax;
+  const canInvite = detail.is_admin && membresActifs < nombreMax && !isCompleted;
   const allMembersPaid =
     showMemberBadges && members.length > 0 && paidCount === members.length;
   const canCloseTour = isHost && hasTour && allMembersPaid;
@@ -264,7 +270,11 @@ export default function TontineDetailsScreen() {
         </View>
 
         <View style={styles.titleRow}>
-          {hasTour ? (
+          {isCompleted ? (
+            <View style={[styles.gaugePlaceholder, { backgroundColor: withOpacity(Colors.success, 0.12) }]}>
+              <Feather name="check-circle" size={28} color={Colors.success} />
+            </View>
+          ) : hasTour ? (
             <View style={styles.gaugeWrap}>
               <Svg width={gaugeSize} height={gaugeSize}>
                 <Circle
@@ -299,29 +309,47 @@ export default function TontineDetailsScreen() {
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{tontineName}</Text>
-            {awaitingOrdre ? (
+            {isCompleted ? (
+              <Text style={styles.subtitle}>
+                Cycle terminé · {totalTours}/{totalTours} tours
+              </Text>
+            ) : awaitingOrdre ? (
               <Text style={styles.subtitle}>Groupe complet · {membresActifs}/{nombreMax} membres</Text>
             ) : (
               <Text style={styles.subtitle}>
-                Tour {currentTour} sur {totalTours}
+                Tour {displayCurrentTour} sur {totalTours}
               </Text>
             )}
           </View>
         </View>
 
-        {objectifTotal > 0 ? (
+        {isCompleted ? (
+          <View style={styles.successBanner}>
+            <Feather name="check-circle" size={22} color={Colors.success} />
+            <View style={styles.successBannerTexts}>
+              <Text style={styles.successBannerTitle}>Cycle terminé</Text>
+              <Text style={styles.successBannerSub}>
+                Les {totalTours} tours sont achevés. Chaque membre a reçu son pot de{' '}
+                {potParTour > 0 ? `${potParTour.toLocaleString('fr-FR')} FCFA` : 'cagnotte'}.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {!isCompleted && potParTour > 0 ? (
           <View style={styles.objectifCard}>
             <View style={styles.objectifHeader}>
-              <Feather name="target" size={18} color={Colors.brand} />
-              <Text style={styles.objectifLabel}>Objectif de la collecte</Text>
+              <Feather name="layers" size={18} color={Colors.brand} />
+              <Text style={styles.objectifLabel}>Pot du tour</Text>
             </View>
             <Text style={styles.objectifAmount}>
-              {objectifTotal.toLocaleString('fr-FR')}{' '}
+              {potParTour.toLocaleString('fr-FR')}{' '}
               <Text style={styles.objectifUnit}>FCFA</Text>
             </Text>
             {cotisationAmount > 0 ? (
               <Text style={styles.objectifHint}>
-                Mise par participant : {cotisationAmount.toLocaleString('fr-FR')} FCFA à chaque tour
+                Mise : {cotisationAmount.toLocaleString('fr-FR')} FCFA / membre · {nombreMax} tours
+                (1 cycle)
               </Text>
             ) : null}
           </View>
@@ -439,13 +467,15 @@ export default function TontineDetailsScreen() {
         </View>
         {members.map((m) => {
           const cfg = memberBadgeConfig(m.status, m.turn);
-          const memberSubline = isRecruiting
-            ? 'En recrutement'
-            : isAwaitingOrdre
-              ? `Rang ${m.turn} · ordre de ramassage`
-              : showMemberBadges
-                ? `Tour de ramassage ${m.turn}`
-                : `Rang ${m.turn}`;
+          const memberSubline = isCompleted
+            ? `Cycle terminé · rang ${m.turn}`
+            : isRecruiting
+              ? 'En recrutement'
+              : isAwaitingOrdre
+                ? `Rang ${m.turn} · ordre de ramassage`
+                : showMemberBadges
+                  ? `Tour de ramassage ${m.turn}`
+                  : `Rang ${m.turn}`;
           return (
             <View key={m.id} style={styles.memberItem}>
               <View style={styles.memberLeft}>
@@ -487,7 +517,7 @@ export default function TontineDetailsScreen() {
           </AnimatedPressable>
         ) : null}
 
-        {!awaitingOrdre && detail.ordre_publie ? (
+        {!isCompleted && !awaitingOrdre && detail.ordre_publie ? (
           <View style={styles.lockBanner}>
             <Feather name="lock" size={16} color={Colors.gray[600]} />
             <Text style={styles.lockText}>{ORDRE_LOCK_MESSAGE}</Text>
@@ -563,6 +593,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.gray[500],
     marginTop: 8,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: 20,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: withOpacity(Colors.success, 0.1),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.success, 0.25),
+  },
+  successBannerTexts: { flex: 1 },
+  successBannerTitle: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 15,
+    color: Colors.gray[900],
+    marginBottom: 4,
+  },
+  successBannerSub: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[600],
+    lineHeight: 18,
   },
   actionCard: {
     marginHorizontal: Theme.spacing.page,

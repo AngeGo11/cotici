@@ -31,6 +31,8 @@ from apps.tontine.models import (
 from apps.tontine.helpers import (
     active_members_count,
     compute_nombre_tours,
+    regles_groupe_nombre_tours,
+    regles_groupe_objectif_stocke,
     compute_phase,
     display_name,
     groupe_complet,
@@ -183,7 +185,27 @@ def _serialize_tour(tour: TourTontine) -> dict:
     }
 
 
-def _beneficiaire_pour_tour(tontine: Tontine, regle: TontineRegle, numero_du_tour: int):
+def _users_deja_servis(tontine: Tontine, *extra_user_ids: int) -> set:
+    """Membres ayant déjà reçu le pot (tours terminés + exclusions explicites)."""
+    deja_servis = set(
+        TourTontine.objects.filter(
+            tontine=tontine,
+            statut_tour=TourTontine.STATUT_TOUR.TERMINE,
+        ).values_list("user_id", flat=True)
+    )
+    for user_id in extra_user_ids:
+        if user_id:
+            deja_servis.add(user_id)
+    return deja_servis
+
+
+def _beneficiaire_pour_tour(
+    tontine: Tontine,
+    regle: TontineRegle,
+    numero_du_tour: int,
+    *,
+    exclude_user_ids: Optional[set] = None,
+):
     if regle.ordre_ramassage == TontineRegle.ORDRE_RAMASSAGE.DEFINI_PAR_ADMIN:
         try:
             return TontineMembre.objects.select_related("membre").get(
@@ -194,12 +216,8 @@ def _beneficiaire_pour_tour(tontine: Tontine, regle: TontineRegle, numero_du_tou
         except TontineMembre.DoesNotExist:
             return None
 
-    deja_servis = set(
-        TourTontine.objects.filter(
-            tontine=tontine,
-            statut_tour=TourTontine.STATUT_TOUR.TERMINE,
-        ).values_list("user_id", flat=True)
-    )
+    extra = tuple(exclude_user_ids or ())
+    deja_servis = _users_deja_servis(tontine, *extra)
     eligibles = list(
         TontineMembre.objects.filter(
             tontine=tontine,
@@ -327,13 +345,6 @@ def define_tontine_regle(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    objectif_cotisation = _parse_positive_int(request.data.get("objectif_cotisation"))
-    if objectif_cotisation is None:
-        return Response(
-            {"detail": "Objectif de cotisation (montant total) invalide ou absent."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     montant_cotisation = _parse_positive_int(
         request.data.get("montant_cotisation") or request.data.get("montant_par_participant")
     )
@@ -350,13 +361,29 @@ def define_tontine_regle(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
-        nombre_tours = compute_nombre_tours(objectif_cotisation, montant_cotisation, nombre_max)
-    except ValueError:
-        return Response(
-            {"detail": "Impossible de calculer le nombre de tours avec ces montants."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    if tontine.type_tontine == Tontine.TYPE_TONTINE.GROUPE:
+        try:
+            nombre_tours = regles_groupe_nombre_tours(nombre_max)
+            objectif_cotisation = regles_groupe_objectif_stocke(montant_cotisation, nombre_max)
+        except ValueError:
+            return Response(
+                {"detail": "Impossible de calculer les règles avec ces montants."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        objectif_cotisation = _parse_positive_int(request.data.get("objectif_cotisation"))
+        if objectif_cotisation is None:
+            return Response(
+                {"detail": "Objectif de cotisation (montant total) invalide ou absent."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            nombre_tours = compute_nombre_tours(objectif_cotisation, montant_cotisation, nombre_max)
+        except ValueError:
+            return Response(
+                {"detail": "Impossible de calculer le nombre de tours avec ces montants."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     ordre_raw = request.data.get("ordre_choisie") or request.data.get("ordre_ramassage")
     ordre_ramassage = _resolve_ordre_ramassage(ordre_raw)
@@ -648,7 +675,12 @@ def _changer_tour_impl(request):
         beneficiaire_suivant = None
 
         if numero_suivant <= regle.nombre_tours:
-            beneficiaire_suivant = _beneficiaire_pour_tour(tontine, regle, numero_suivant)
+            beneficiaire_suivant = _beneficiaire_pour_tour(
+                tontine,
+                regle,
+                numero_suivant,
+                exclude_user_ids={tour_en_cours.user_id},
+            )
             if beneficiaire_suivant is None:
                 return Response(
                     {

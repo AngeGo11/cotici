@@ -20,6 +20,7 @@ import { useTontines, type TontineListItem } from '@/modules/tontine/hooks/useTo
 
 const statusLabel = {
   active: { text: 'Actif', color: Colors.success, bg: withOpacity(Colors.success, 0.12) },
+  completed: { text: 'Terminée', color: Colors.success, bg: withOpacity(Colors.success, 0.12) },
   paused: { text: 'En pause', color: Colors.gray[500], bg: withOpacity(Colors.gray[500], 0.12) },
   awaiting: { text: 'Ordre à définir', color: Colors.accent, bg: withOpacity(Colors.accent, 0.12) },
 };
@@ -52,7 +53,8 @@ export default function TontineListScreen() {
     }, [loadRecruiting, loadInvitations, reload]),
   );
 
-  const totalCotisations = tontines.reduce((s, t) => s + t.amount, 0);
+  const activeTontines = tontines.filter((t) => t.phase !== 'completed');
+  const totalCotisations = activeTontines.reduce((s, t) => s + t.amount, 0);
   const avgCyclePct =
     tontines.length > 0
       ? Math.round(tontines.reduce((s, t) => s + t.turnPct, 0) / tontines.length)
@@ -110,7 +112,7 @@ export default function TontineListScreen() {
           <View style={styles.summaryRow}>
             <View>
               <Text style={styles.summaryLabel}>Tontines actives</Text>
-              <Text style={styles.summaryValue}>{tontines.length}</Text>
+              <Text style={styles.summaryValue}>{activeTontines.length}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.summaryLabel}>Pot cumulé / cycle</Text>
@@ -174,18 +176,23 @@ export default function TontineListScreen() {
         ) : null}
 
         {tontines.map((tontine) => {
+          const isCompleted = tontine.phase === 'completed' || tontine.cycleTermine;
           const flowBadge =
             tontine.phase === 'awaiting_ordre'
               ? statusLabel.awaiting
-              : tontine.status === 'paused'
-                ? statusLabel.paused
-                : statusLabel.active;
+              : isCompleted
+                ? statusLabel.completed
+                : tontine.status === 'paused'
+                  ? statusLabel.paused
+                  : statusLabel.active;
           let displayTurn = tontine.turn;
           if (tontine.phase === 'active' && tontine.ordrePublie && displayTurn.startsWith('0/')) {
             const { total } = parseTurn(displayTurn);
             displayTurn = `1/${total}`;
           }
           const { current, total, pct } = parseTurn(displayTurn);
+          const turnPct = isCompleted ? 100 : pct;
+          const turnCurrent = isCompleted ? total : current;
           const membresLabel = `${tontine.members}/${tontine.nombreMax} membres`;
 
           return (
@@ -221,16 +228,23 @@ export default function TontineListScreen() {
                     Groupe complet — définissez l&apos;ordre de ramassage pour démarrer
                   </Text>
                 </View>
+              ) : isCompleted ? (
+                <View style={styles.completedBlock}>
+                  <Feather name="check-circle" size={16} color={Colors.success} />
+                  <Text style={styles.completedText}>
+                    Cycle terminé · {total}/{total} tours
+                  </Text>
+                </View>
               ) : (
                 <View style={styles.turnBlock}>
                   <View style={styles.turnHeader}>
                     <Text style={styles.turnLabel}>Cycle en cours</Text>
                     <Text style={styles.turnFraction}>
-                      Tour {current}/{total}
+                      Tour {turnCurrent}/{total}
                     </Text>
                   </View>
                   <View style={styles.turnTrack}>
-                    <View style={[styles.turnFill, { width: `${pct}%` }]} />
+                    <View style={[styles.turnFill, { width: `${turnPct}%` }]} />
                   </View>
                 </View>
               )}
@@ -454,6 +468,22 @@ const styles = StyleSheet.create({
   awaitingText: {
     flex: 1,
     fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.gray[700],
+    lineHeight: 18,
+  },
+  completedBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.sm,
+    backgroundColor: withOpacity(Colors.success, 0.08),
+    padding: Theme.spacing.md,
+    borderRadius: Theme.radius.sm,
+    marginBottom: Theme.spacing.md,
+  },
+  completedText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.medium,
     fontSize: 13,
     color: Colors.gray[700],
     lineHeight: 18,

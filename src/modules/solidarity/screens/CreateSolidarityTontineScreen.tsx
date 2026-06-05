@@ -88,7 +88,7 @@ export default function CreateSolidarityTontineScreen() {
         <Text style={styles.sectionEyebrow}>Motif & montants</Text>
 
         <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Motif (libre ou choix rapide)</Text>
+          <Text style={styles.label}>Motif</Text>
           <TextInput
             style={styles.input}
             value={reason}
@@ -127,20 +127,6 @@ export default function CreateSolidarityTontineScreen() {
           </View>
         </View>
 
-        <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Montant par participant</Text>
-          <View style={styles.inputWithUnit}>
-            <TextInput
-              style={styles.inputField}
-              value={contributionAmount}
-              onChangeText={setContributionAmount}
-              placeholder="25 000"
-              placeholderTextColor={Colors.gray[400]}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.unit}>FCFA</Text>
-          </View>
-        </View>
 
         {participants > 0 && (
           <View style={styles.previewCard}>
@@ -163,7 +149,7 @@ export default function CreateSolidarityTontineScreen() {
           <Feather name="heart" size={20} color={Colors.white} />
           <Text style={styles.createButtonText}>Créer le groupe de soutien</Text>
         </AnimatedPressable>
-        <Text style={styles.footerNote}>Vous pourrez inviter les participants après la création.</Text>
+        <Text style={styles.footerNote}>Vous pourrez inviter les participants après la création via un lien d'invitation.</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>

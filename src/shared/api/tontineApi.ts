@@ -1,6 +1,6 @@
 import { requestWithAuth } from './authFetch';
 
-export type TontinePhase = 'recruiting' | 'awaiting_ordre' | 'active';
+export type TontinePhase = 'recruiting' | 'awaiting_ordre' | 'active' | 'completed';
 
 export type TontineRegle = {
   objectif_cotisation: string;
@@ -44,6 +44,7 @@ export type TontineSummary = {
   qr_code: string;
   hote_id: number;
   phase: TontinePhase;
+  cycle_termine?: boolean;
   membres_actifs: number;
   nombre_max: number;
   ordre_mode: 'admin' | 'random' | null;
@@ -120,18 +121,20 @@ function extractErrorDetail(body: unknown, fallback: string): string {
 
 export function tontineSummaryToUi(t: TontineSummary) {
   const { current, total, pct } = parseTurn(t.turn);
+  const isCompleted = t.phase === 'completed' || t.cycle_termine === true;
   return {
     id: String(t.id),
     name: t.nom,
     members: t.membres_actifs,
     turn: t.turn,
-    turnCurrent: current,
+    turnCurrent: isCompleted ? total : current,
     turnTotal: total,
-    turnPct: pct,
+    turnPct: isCompleted ? 100 : pct,
     amount: t.amount,
     cotisationAmount: t.cotisation_amount,
     objectifTotal: t.objectif_total ?? 0,
-    status: t.est_active ? ('active' as const) : ('paused' as const),
+    status: isCompleted ? ('completed' as const) : t.est_active ? ('active' as const) : ('paused' as const),
+    cycleTermine: isCompleted,
     isSolidarity: false,
     phase: t.phase,
     nombreMax: t.nombre_max,
@@ -160,8 +163,6 @@ export type CreateTontineParams = {
 
 export type DefineTontineReglesParams = {
   tontine_id: number;
-  /** Montant total à atteindre pour le groupe. */
-  objectif_cotisation: number;
   /** Mise de chaque participant à chaque tour. */
   montant_cotisation: number;
   nombre_max: number;

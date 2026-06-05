@@ -107,7 +107,7 @@ class TontineRegle(models.Model):
     objectif_cotisation = models.DecimalField(
         max_digits=10,
         decimal_places=0,
-        help_text="Montant total à atteindre pour le groupe.",
+        help_text="Volume total sur le cycle (dérivé pour les tontines de groupe).",
     )
     montant_cotisation = models.DecimalField(
         max_digits=10,

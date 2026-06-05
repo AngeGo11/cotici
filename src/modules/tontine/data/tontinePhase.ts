@@ -5,7 +5,7 @@
  * active → ordre verrouillé, cotisations / tours
  */
 
-export type TontinePhase = 'recruiting' | 'awaiting_ordre' | 'active';
+export type TontinePhase = 'recruiting' | 'awaiting_ordre' | 'active' | 'completed';
 
 export type OrdreRamassageMode = 'admin' | 'random';
 

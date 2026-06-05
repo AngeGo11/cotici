@@ -144,17 +144,13 @@ export default function JoinTontineRulesScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Objectif et cotisations</Text>
-              <RuleRow
-                label="Objectif de la collecte"
-                value={`${invitation.objectif_total.toLocaleString('fr-FR')} FCFA`}
-              />
+              <Text style={styles.cardTitle}>Cotisations</Text>
               <RuleRow
                 label="Mise par participant"
                 value={`${invitation.cotisation_amount.toLocaleString('fr-FR')} FCFA / tour`}
               />
               <RuleRow
-                label="Pot par tour"
+                label="Montant reçu par bénéficiaire"
                 value={`${invitation.pot_par_tour.toLocaleString('fr-FR')} FCFA`}
               />
               <RuleRow

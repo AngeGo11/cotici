@@ -23,6 +23,25 @@ def compute_nombre_tours(objectif_total: int, montant_cotisation: int, nombre_ma
     return max(1, math.ceil(objectif_total / pot_par_tour))
 
 
+def regles_groupe_nombre_tours(nombre_max: int) -> int:
+    """Tontine de groupe : 1 cycle complet, chaque membre ramasse une fois."""
+    if nombre_max < 2:
+        raise ValueError("Nombre de participants invalide.")
+    return nombre_max
+
+
+def regles_groupe_objectif_stocke(montant_cotisation: int, nombre_max: int) -> int:
+    """Volume total collecté sur un cycle (N pots de mise × N). Conservé pour compatibilité."""
+    pot_par_tour = montant_cotisation * nombre_max
+    if pot_par_tour <= 0:
+        raise ValueError("Pot par tour invalide.")
+    return pot_par_tour * nombre_max
+
+
+def pot_par_tour_groupe(montant_cotisation: int, nombre_max: int) -> int:
+    return montant_cotisation * nombre_max
+
+
 def display_name(tontine: Tontine) -> str:
     desc = (tontine.description or "").strip()
     if " — " in desc:
@@ -93,10 +112,23 @@ def groupe_complet(tontine: Tontine, regle: TontineRegle) -> bool:
     return active_members_count(tontine) >= regle.nombre_max
 
 
+def cycle_termine(tontine: Tontine, regle: Optional[TontineRegle]) -> bool:
+    """Tous les tours sont clôturés et la tontine n'est plus active."""
+    if regle is None or regle.nombre_tours <= 0:
+        return False
+    tours_done = TourTontine.objects.filter(
+        tontine=tontine,
+        statut_tour=TourTontine.STATUT_TOUR.TERMINE,
+    ).count()
+    return not tontine.est_active and tours_done >= regle.nombre_tours
+
+
 def compute_phase(tontine: Tontine, regle: Optional[TontineRegle]) -> str:
-    """recruiting | awaiting_ordre | active"""
+    """recruiting | awaiting_ordre | active | completed"""
     if regle is None:
         return "recruiting"
+    if cycle_termine(tontine, regle):
+        return "completed"
     count = active_members_count(tontine)
     if count < regle.nombre_max:
         return "recruiting"
@@ -247,6 +279,7 @@ def serialize_tontine_summary(
     cotisation = int(regle.montant_cotisation) if regle else 0
     pot_mensuel = cotisation * membres if regle else 0
     objectif_total = int(regle.objectif_cotisation) if regle else 0
+    termine = cycle_termine(tontine, regle)
 
     return {
         "id": tontine.id,
@@ -258,6 +291,7 @@ def serialize_tontine_summary(
         "qr_code": tontine.qr_code,
         "hote_id": tontine.hote_id,
         "phase": phase,
+        "cycle_termine": termine,
         "membres_actifs": membres,
         "nombre_max": regle.nombre_max if regle else 0,
         "ordre_mode": ordre_mode_api(regle) if regle else None,

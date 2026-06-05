@@ -83,7 +83,11 @@ export function getActiveTontinesForCotisation(): UserTontine[] {
       return false;
     }
     const live = getTontinePhaseState(t.id);
-    return live?.phase === 'active' || (live?.ordrePublie ?? t.phase === 'active');
+    const phase = live?.phase ?? t.phase;
+    if (phase === 'completed') {
+      return false;
+    }
+    return phase === 'active' || (live?.ordrePublie ?? t.phase === 'active');
   });
 }
 
@@ -113,6 +117,13 @@ export function getTontineListBadge(
   if (phase === 'active') {
     return {
       label: 'Actif',
+      color: Colors.success,
+      bg: withOpacity(Colors.success, 0.12),
+    };
+  }
+  if (phase === 'completed') {
+    return {
+      label: 'Terminée',
       color: Colors.success,
       bg: withOpacity(Colors.success, 0.12),
     };
