@@ -25,6 +25,8 @@ export type WalletTransaction = {
   statut_transaction: string;
   mode_de_paiement: string;
   date_transaction: string;
+  motif_collecte?: string;
+  beneficiaire_nom?: string;
 };
 
 export type WalletTransactionsResponse = {

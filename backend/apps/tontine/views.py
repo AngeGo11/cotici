@@ -1313,3 +1313,6 @@ def demarrer_tontine(request):
     """Alias explicite pour démarrer le tour 1 (même logique que changer_tour)."""
     return _changer_tour_impl(request)
 
+
+
+# Inclure la possibilité de definir le nombre de tour voulu

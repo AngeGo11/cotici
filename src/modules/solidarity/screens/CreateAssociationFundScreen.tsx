@@ -14,14 +14,12 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 
-const categories = ['Religion', 'Éducation', 'Santé', 'Infrastructure', 'Sport', 'Culture'] as const;
 
 export default function CreateAssociationFundScreen() {
   const router = useRouter();
   const [fundName, setFundName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -83,20 +81,7 @@ export default function CreateAssociationFundScreen() {
           />
         </View>
 
-        <Text style={styles.sectionEyebrow}>Catégorie</Text>
-        <View style={styles.categoryGrid}>
-          {categories.map((c) => {
-            const selected = category === c;
-            return (
-              <AnimatedPressable
-                key={c}
-                style={[styles.categoryChip, selected && styles.categoryChipActive]}
-                onPress={() => setCategory(c)} >
-                <Text style={[styles.categoryText, selected && styles.categoryTextActive]}>{c}</Text>
-              </AnimatedPressable>
-            );
-          })}
-        </View>
+        
 
         {targetAmount ? (
           <View style={styles.previewCard}>

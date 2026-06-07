@@ -22,6 +22,8 @@ export interface ActivityDetail extends Activity {
   method: string;
   accountHint?: string;
   note?: string;
+  /** Sens d'affichage : crédit/débit wallet ou neutre (action admin sans impact solde). */
+  tone?: 'credit' | 'debit' | 'neutral';
 }
 
 export interface Message {

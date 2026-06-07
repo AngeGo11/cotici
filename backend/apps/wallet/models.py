@@ -39,7 +39,14 @@ class Transaction(models.Model):
         DEBIT = "DÉBIT", _("Débit")
         CONTRIBUTION_SOLIDAIRE = "CONTRIBUTION_SOLIDAIRE", _("Contribution solidaire")
         VERSEMENT_SOLIDAIRE = "VERSEMENT_SOLIDAIRE", _("Versement solidaire")
+        VALIDATION_VERSEMENT_SOLIDAIRE = (
+            "VALIDATION_VERSEMENT_SOLIDAIRE",
+            _("Validation versement solidaire"),
+        )
+        CONTRIBUTION_CAGNOTTE = "CONTRIBUTION_CAGNOTTE", _("Contribution cagnotte")
+        VERSEMENT_CAGNOTTE = "VERSEMENT_CAGNOTTE", _("Versement cagnotte")
 
+    # Clé étrangère
     tontine = models.ForeignKey(Tontine, on_delete=models.CASCADE, null=True, blank=True)
     epargne = models.ForeignKey(EpargnePersonnelle, on_delete=models.CASCADE, null=True, blank=True)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
@@ -99,6 +106,12 @@ class Transaction(models.Model):
                     )
                     | models.Q(
                         type_transaction="VERSEMENT_SOLIDAIRE",
+                        tontine__isnull=False,
+                        tour__isnull=True,
+                        epargne__isnull=True,
+                    )
+                    | models.Q(
+                        type_transaction="VALIDATION_VERSEMENT_SOLIDAIRE",
                         tontine__isnull=False,
                         tour__isnull=True,
                         epargne__isnull=True,
@@ -163,7 +176,11 @@ class Transaction(models.Model):
                     {"epargne": _("Un débit ne doit pas référencer l’épargne personnelle.")}
                 )
 
-        elif tt in (T.CONTRIBUTION_SOLIDAIRE, T.VERSEMENT_SOLIDAIRE):
+        elif tt in (
+            T.CONTRIBUTION_SOLIDAIRE,
+            T.VERSEMENT_SOLIDAIRE,
+            T.VALIDATION_VERSEMENT_SOLIDAIRE,
+        ):
             if not self.tontine_id:
                 raise ValidationError(
                     {"tontine": _("Une opération solidaire doit référencer la collecte.")}

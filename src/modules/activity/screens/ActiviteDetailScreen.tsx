@@ -13,6 +13,11 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { useWalletActivities } from '@/modules/activity/hooks';
+import {
+  activityToneStyle,
+  formatActivityAmount,
+  resolveActivityToneFromDetail,
+} from '@/shared/api/activityDisplay';
 
 export default function ActiviteDetailScreen() {
   const router = useRouter();
@@ -54,7 +59,8 @@ export default function ActiviteDetailScreen() {
     );
   }
 
-  const isCredit = activity.amount > 0;
+  const tone = resolveActivityToneFromDetail(activity);
+  const toneStyle = activityToneStyle(tone);
   const statusColor =
     activity.status === 'Complété'
       ? Colors.success
@@ -75,25 +81,19 @@ export default function ActiviteDetailScreen() {
           <View
             style={[
               styles.heroIcon,
-              {
-                backgroundColor: isCredit
-                  ? withOpacity(Colors.success, 0.12)
-                  : withOpacity(Colors.danger, 0.08),
-              },
+              { backgroundColor: toneStyle.iconBg },
             ]}
           >
             <Feather
-              name={isCredit ? 'arrow-down-left' : 'arrow-up-right'}
+              name={toneStyle.icon}
               size={32}
-              color={isCredit ? Colors.success : Colors.danger}
+              color={toneStyle.iconColor}
             />
           </View>
           <Text style={styles.typeLabel}>{activity.type}</Text>
-          <Text
-            style={[styles.amount, { color: isCredit ? Colors.success : Colors.danger }]}
-          >
-            {isCredit ? '+' : ''}
-            {activity.amount.toLocaleString('fr-FR')} <Text style={styles.currency}>FCFA</Text>
+          <Text style={[styles.amount, { color: toneStyle.amountColor }]}>
+            {formatActivityAmount(activity.amount, tone)}{' '}
+            <Text style={styles.currency}>FCFA</Text>
           </Text>
           <View style={[styles.statusPill, { backgroundColor: withOpacity(statusColor, 0.12) }]}>
             <Text style={[styles.statusText, { color: statusColor }]}>{activity.status}</Text>

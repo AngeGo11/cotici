@@ -105,6 +105,8 @@ export default function TontineDetailsScreen() {
   const isAwaitingOrdre = detail.phase === 'awaiting_ordre';
   const awaitingOrdre = isAwaitingOrdre && detail.is_admin;
   const hasTour = Boolean(detail.tour_courant) && !isCompleted;
+  const cycleNotStarted = !isCompleted && !hasTour;
+  const placesRestantes = Math.max(0, nombreMax - membresActifs);
   const showMemberBadges = detail.phase === 'active' && hasTour;
   const isActive = detail.phase === 'active' && (hasTour || detail.ordre_publie);
 
@@ -115,7 +117,6 @@ export default function TontineDetailsScreen() {
 
   const turnStr = detail.turn;
   const { current: currentTour, total: totalTours } = parseTurn(turnStr);
-  const displayCurrentTour = isCompleted ? totalTours : currentTour;
   const tourProgress = isCompleted
     ? 1
     : hasTour
@@ -313,11 +314,17 @@ export default function TontineDetailsScreen() {
               <Text style={styles.subtitle}>
                 Cycle terminé · {totalTours}/{totalTours} tours
               </Text>
-            ) : awaitingOrdre ? (
-              <Text style={styles.subtitle}>Groupe complet · {membresActifs}/{nombreMax} membres</Text>
+            ) : isRecruiting ? (
+              <Text style={styles.subtitle}>En attente de tous les membres</Text>
+            ) : isAwaitingOrdre ? (
+              <Text style={styles.subtitle}>
+                Groupe complet · {membresActifs}/{nombreMax} membres
+              </Text>
+            ) : cycleNotStarted ? (
+              <Text style={styles.subtitle}>Prêt à démarrer</Text>
             ) : (
               <Text style={styles.subtitle}>
-                Tour {displayCurrentTour} sur {totalTours}
+                Tour {currentTour} sur {totalTours}
               </Text>
             )}
           </View>
@@ -470,7 +477,9 @@ export default function TontineDetailsScreen() {
           const memberSubline = isCompleted
             ? `Cycle terminé · rang ${m.turn}`
             : isRecruiting
-              ? 'En recrutement'
+              ? placesRestantes === 1
+                ? 'Membre confirmé · 1 place restante'
+                : `Membre confirmé · ${placesRestantes} places restantes`
               : isAwaitingOrdre
                 ? `Rang ${m.turn} · ordre de ramassage`
                 : showMemberBadges

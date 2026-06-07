@@ -19,6 +19,11 @@ import { Theme } from '@/shared/theme/Theme';
 import { UPCOMING_DEADLINES } from '@/data/upcomingDeadlines';
 import { useWalletActivities } from '@/modules/activity/hooks';
 import {
+  activityToneStyle,
+  formatActivityAmount,
+  resolveActivityToneFromDetail,
+} from '@/shared/api/activityDisplay';
+import {
   useAuth,
   formatFcfaDots,
   formatMonthlyFlow,
@@ -377,7 +382,10 @@ export default function HomeScreen() {
         ) : recentActivities.length === 0 ? (
           <Text style={styles.activityEmpty}>Aucune activité pour le moment.</Text>
         ) : (
-          recentActivities.map((activity) => (
+          recentActivities.map((activity) => {
+            const tone = resolveActivityToneFromDetail(activity);
+            const toneStyle = activityToneStyle(tone);
+            return (
             <AnimatedPressable
               key={activity.id}
               style={styles.activityItem}
@@ -387,18 +395,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.activityIcon,
-                    {
-                      backgroundColor:
-                        activity.amount > 0
-                          ? withOpacity(Colors.success, 0.1)
-                          : withOpacity(Colors.danger, 0.06),
-                    },
+                    { backgroundColor: toneStyle.iconBg },
                   ]}
                 >
                   <Feather
-                    name={activity.amount > 0 ? 'arrow-down-left' : 'arrow-up-right'}
+                    name={toneStyle.icon}
                     size={20}
-                    color={activity.amount > 0 ? Colors.success : Colors.danger}
+                    color={toneStyle.iconColor}
                   />
                 </View>
                 <View>
@@ -409,14 +412,14 @@ export default function HomeScreen() {
               <Text
                 style={[
                   styles.activityAmount,
-                  { color: activity.amount > 0 ? Colors.success : Colors.danger },
+                  { color: toneStyle.amountColor },
                 ]}
               >
-                {activity.amount > 0 ? '+' : ''}
-                {activity.amount.toLocaleString('fr-FR')}F
+                {formatActivityAmount(activity.amount, tone)}F
               </Text>
             </AnimatedPressable>
-          ))
+            );
+          })
         )}
 
         <View style={{ height: 24 }} />

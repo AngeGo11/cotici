@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/savings/', include('apps.savings.urls')),
     path('api/tontine/', include('apps.tontine.urls')),
     path('api/solidarity/', include('apps.solidarity.urls')),
+    path("api/cagnotte/", include('apps.cagnotte.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/audits/', include('apps.audits.urls')),
     path('api/wallet/', include('apps.wallet.urls')),

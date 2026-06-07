@@ -61,42 +61,9 @@ export default function AdminScreen() {
           </View>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Demandes d'Adhésion</Text>
-          <View style={styles.countBadge}><Text style={styles.countText}>{joinRequests.length}</Text></View>
-        </View>
-        {joinRequests.map((req) => (
-          <View key={req.id} style={styles.requestCard}>
-            <View style={styles.requestTop}>
-              <View style={styles.requestLeft}>
-                <View style={styles.requestAvatar}><Text style={styles.requestAvatarText}>{req.avatar}</Text></View>
-                <View>
-                  <Text style={styles.requestName}>{req.name}</Text>
-                  <Text style={styles.requestPhone}>{req.phone}</Text>
-                </View>
-              </View>
-              <Text style={styles.requestDate}>{req.requestDate}</Text>
-            </View>
-            <View style={styles.requestActions}>
-              <AnimatedPressable style={styles.acceptButton}><Feather name="check" size={16} color={Colors.white} /><Text style={styles.acceptText}>Accepter</Text></AnimatedPressable>
-              <AnimatedPressable style={styles.rejectButton}><Feather name="x" size={16} color={Colors.white} /><Text style={styles.rejectText}>Refuser</Text></AnimatedPressable>
-            </View>
-          </View>
-        ))}
+        
 
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text style={styles.sectionTitle}>Validations de Paiement</Text>
-          <View style={[styles.countBadge, { backgroundColor: Colors.success }]}><Text style={styles.countText}>{paymentValidations.length}</Text></View>
-        </View>
-        {paymentValidations.map((pay) => (
-          <View key={pay.id} style={styles.paymentCard}>
-            <View style={styles.paymentTop}>
-              <View><Text style={styles.paymentName}>{pay.memberName}</Text><View style={styles.paymentInfo}><Text style={styles.paymentAmount}>{pay.amount.toLocaleString('fr-FR')} F</Text><View style={styles.dot} /><Text style={styles.paymentMethod}>{pay.method}</Text></View></View>
-              <Text style={styles.paymentDate}>{pay.date}</Text>
-            </View>
-            <AnimatedPressable style={styles.confirmButton}><Text style={styles.confirmText}>Confirmer la réception</Text></AnimatedPressable>
-          </View>
-        ))}
+        
 
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Text style={styles.sectionTitle}>Pénalités</Text>

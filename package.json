@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "web:site": "npm run dev --prefix web",
     "web:site:build": "npm run build --prefix web",
-    "proxy": "node proxy-server.mjs"
+    "proxy": "node --watch proxy-server.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",
