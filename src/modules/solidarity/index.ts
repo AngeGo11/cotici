@@ -1,4 +1,3 @@
-export { default as CreateAssociationFundScreen } from './screens/CreateAssociationFundScreen';
 export { default as CreateSolidarityTontineScreen } from './screens/CreateSolidarityTontineScreen';
 export { default as ShareSolidarityCollectScreen } from './screens/ShareSolidarityCollectScreen';
 export { default as SolidarityCollectScreen } from './screens/SolidarityCollectScreen';

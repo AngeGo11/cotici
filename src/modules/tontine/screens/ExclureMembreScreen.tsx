@@ -1,75 +1,203 @@
-import { useState, useCallback, useMemo } from 'react';
-import { 
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  TextInput,
- } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TextInput, Alert } from 'react-native';
+import { AnimatedPressable, ConfirmSheet, EmptyState, Skeleton, StatusBadge } from '@/shared/ui';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+import { exclureMembre, fetchMembresGroupe, fetchTontineDetail, type MembreGroupe } from '@/shared/api';
 
-type MemberRow = { id: string; name: string; avatar: string; phone: string; role?: string };
+const DEFAULT_NOM = 'ce groupe';
 
-const INITIAL_MEMBERS: MemberRow[] = [
-  { id: '1', name: 'Marie Koné', avatar: 'MK', phone: '+225 07 12 34 56', role: 'Trésorier' },
-  { id: '2', name: 'Jean Diabaté', avatar: 'JD', phone: '+225 05 98 11 22' },
-  { id: '3', name: 'Fatou Touré', avatar: 'FT', phone: '+225 07 44 55 66' },
-  { id: '4', name: 'Amadou Bamba', avatar: 'AB', phone: '+225 01 00 00 00' },
-];
-
-const DEFAULT_NOM = 'Tontine Entrepreneurs';
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
 
 export default function ExclureMembreScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ tontineNom?: string }>();
+  const params = useLocalSearchParams<{ id?: string; tontineNom?: string }>();
+  const tontineId = typeof params.id === 'string' ? params.id : undefined;
   const tontineNom = useMemo(
     () => (typeof params.tontineNom === 'string' && params.tontineNom ? params.tontineNom : DEFAULT_NOM),
     [params.tontineNom],
   );
 
-  const [members, setMembers] = useState(INITIAL_MEMBERS);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [members, setMembers] = useState<MembreGroupe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [reason, setReason] = useState('');
+  const [confirmSheetOpen, setConfirmSheetOpen] = useState(false);
+  const [excluding, setExcluding] = useState(false);
+  const [ordreMode, setOrdreMode] = useState<'admin' | 'random' | null>(null);
 
-  const selected = members.find((m) => m.id === selectedId);
+  const load = useCallback(async () => {
+    if (!tontineId) {
+      setError('Tontine introuvable.');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const [membresResult, detailResult] = await Promise.all([
+      fetchMembresGroupe(tontineId),
+      fetchTontineDetail(tontineId),
+    ]);
+    if (membresResult.ok) {
+      setMembers(membresResult.data.results.filter((m) => !m.is_hote));
+    } else {
+      setError(membresResult.detail);
+    }
+    if (detailResult.ok) {
+      setOrdreMode(detailResult.data.ordre_mode);
+    }
+    setLoading(false);
+  }, [tontineId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const selected = members.find((m) => m.user_id === selectedUserId);
 
   const requestExclude = useCallback(() => {
-    if (!selected) return;
-    const name = selected.name;
-    const idToRemove = selected.id;
-    const willBeEmpty = members.length <= 1;
-    Alert.alert(
-      'Exclure ce membre ?',
-      `« ${name} » ne pourra plus participer à cette tontine. Cette action doit respecter le quorum et le règlement du groupe.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Exclure',
-          style: 'destructive',
-          onPress: () => {
-            setMembers((prev) => prev.filter((m) => m.id !== idToRemove));
-            setSelectedId(null);
-            setReason('');
-            Alert.alert('Membre exclu', `${name} a été retiré de la tontine (démo).`, [
-              { text: 'OK', onPress: () => (willBeEmpty ? router.back() : undefined) },
-            ]);
-          },
-        },
-      ],
+    if (!selected || selected.peut_etre_exclu === false) return;
+    setConfirmSheetOpen(true);
+  }, [selected]);
+
+  const confirmExclude = useCallback(() => {
+    if (!selected || !tontineId) return;
+    void (async () => {
+      setExcluding(true);
+      const result = await exclureMembre({
+        tontine_id: Number(tontineId),
+        user_id: selected.user_id,
+        motif: reason.trim() || undefined,
+      });
+      setExcluding(false);
+      setConfirmSheetOpen(false);
+      if (!result.ok) {
+        Alert.alert('Erreur', result.detail);
+        return;
+      }
+      router.back();
+    })();
+  }, [selected, tontineId, reason, router]);
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} shape="card" height={78} style={styles.skeletonCard} />
+          ))}
+        </>
+      );
+    }
+
+    if (error) {
+      return (
+        <EmptyState icon="alert-circle" title="Impossible de charger les membres" description={error} actionLabel="Réessayer" onAction={load} />
+      );
+    }
+
+    if (members.length === 0) {
+      return (
+        <EmptyState
+          icon="users"
+          title="Aucun membre à exclure"
+          description="Le groupe ne compte pas d'autre membre que l'hôte."
+        />
+      );
+    }
+
+    return (
+      <>
+        {members.map((m) => {
+          const active = selectedUserId === m.user_id;
+          const disabled = m.peut_etre_exclu === false;
+          return (
+            <AnimatedPressable
+              key={m.id}
+              style={[styles.card, active && styles.cardActive, disabled && styles.cardDisabled]}
+              onPress={() => {
+                if (disabled) return;
+                setSelectedUserId(m.user_id);
+              }}
+              disabled={disabled}
+            >
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials(m.name)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.memberName}>{m.name}</Text>
+                {m.numero_telephone ? (
+                  <Text style={styles.memberPhone}>{m.numero_telephone}</Text>
+                ) : null}
+                <View style={styles.badgeRow}>
+                  <StatusBadge
+                    label={m.role === 'ADMINISTRATEUR' ? 'Administrateur' : 'Participant'}
+                    tone={m.role === 'ADMINISTRATEUR' ? 'brand' : 'neutral'}
+                  />
+                  {ordreMode === 'random' ? (
+                    <Text style={styles.orderHint}>Bénéficiaire tiré au sort</Text>
+                  ) : m.ordre_ramassage > 0 ? (
+                    <Text style={styles.orderHint}>Rang {m.ordre_ramassage}</Text>
+                  ) : null}
+                  {Number(m.penalites_impayees) > 0 ? (
+                    <Text style={styles.penaltyHint}>
+                      {Number(m.penalites_impayees).toLocaleString('fr-FR')} FCFA dus
+                    </Text>
+                  ) : null}
+                </View>
+                {disabled && m.motif_blocage_exclusion ? (
+                  <Text style={styles.blockedHint}>{m.motif_blocage_exclusion}</Text>
+                ) : null}
+              </View>
+              <View style={[styles.radio, active && styles.radioOn, disabled && styles.radioDisabled]}>
+                {active ? <View style={styles.radioInner} /> : null}
+              </View>
+            </AnimatedPressable>
+          );
+        })}
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Motif (optionnel)</Text>
+          <TextInput
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Ex. : non-paiement répété, décision du comité…"
+            placeholderTextColor={Colors.gray[400]}
+            style={styles.textarea}
+            multiline
+            numberOfLines={2}
+            textAlignVertical="top"
+          />
+        </View>
+
+        <AnimatedPressable
+          style={[styles.dangerButton, (!selected || excluding) && styles.dangerButtonDisabled]}
+          onPress={requestExclude}
+          disabled={!selected || excluding}
+        >
+          <Feather name="user-minus" size={20} color={Colors.white} />
+          <Text style={styles.dangerText}>Exclure du groupe</Text>
+        </AnimatedPressable>
+      </>
     );
-  }, [selected, members.length, router]);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
+        <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
         </AnimatedPressable>
         <View style={styles.topBarText}>
@@ -83,64 +211,11 @@ export default function ExclureMembreScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>
-          Sélectionnez la personne à retirer du groupe. L’exclusion est irréversible sur cet appareil (démo).
+          Sélectionnez la personne à retirer du groupe. L&apos;exclusion est irréversible et recompacte
+          automatiquement l&apos;ordre de ramassage restant.
         </Text>
 
-        {members.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Feather name="users" size={40} color={Colors.gray[400]} />
-            <Text style={styles.emptyTitle}>Aucun membre à afficher</Text>
-            <AnimatedPressable onPress={() => router.back()}>
-              <Text style={styles.emptyLink}>Retour</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <>
-            {members.map((m) => {
-              const active = selectedId === m.id;
-              return (
-                <AnimatedPressable
-                  key={m.id}
-                  style={[styles.card, active && styles.cardActive]}
-                  onPress={() => setSelectedId(m.id)} >
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{m.avatar}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.memberName}>{m.name}</Text>
-                    <Text style={styles.memberPhone}>{m.phone}</Text>
-                    {m.role ? <Text style={styles.role}>{m.role}</Text> : null}
-                  </View>
-                  <View style={[styles.radio, active && styles.radioOn]}>
-                    {active ? <View style={styles.radioInner} /> : null}
-                  </View>
-                </AnimatedPressable>
-              );
-            })}
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Motif (recommandé)</Text>
-              <TextInput
-                value={reason}
-                onChangeText={setReason}
-                placeholder="Ex. : non-paiement répété, décision du comité…"
-                placeholderTextColor={Colors.gray[400]}
-                style={styles.textarea}
-                multiline
-                numberOfLines={2}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <AnimatedPressable
-              style={[styles.dangerButton, !selected && styles.dangerButtonDisabled]}
-              onPress={requestExclude}
-              disabled={!selected} >
-              <Feather name="user-minus" size={20} color={Colors.white} />
-              <Text style={styles.dangerText}>Exclure du groupe</Text>
-            </AnimatedPressable>
-          </>
-        )}
+        {renderContent()}
 
         <View style={styles.legalBox}>
           <Feather name="alert-circle" size={18} color={Colors.accent} />
@@ -150,6 +225,21 @@ export default function ExclureMembreScreen() {
         </View>
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmSheetOpen}
+        title="Exclure ce membre ?"
+        description={
+          selected
+            ? `« ${selected.name} » ne pourra plus participer à cette tontine. Cette action est irréversible et recompacte l'ordre de ramassage des membres restants.`
+            : ''
+        }
+        confirmLabel="Exclure"
+        confirmVariant="danger"
+        loading={excluding}
+        onConfirm={confirmExclude}
+        onCancel={() => setConfirmSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -176,6 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.lg,
   },
+  skeletonCard: { marginHorizontal: Theme.spacing.page, marginBottom: 10, borderRadius: Theme.radius.lg },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -190,6 +281,7 @@ const styles = StyleSheet.create({
     ...Theme.shadow.soft,
   },
   cardActive: { borderColor: Colors.danger, backgroundColor: withOpacity(Colors.danger, 0.04) },
+  cardDisabled: { opacity: 0.55 },
   avatar: {
     width: 48,
     height: 48,
@@ -201,7 +293,16 @@ const styles = StyleSheet.create({
   avatarText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.gray[700] },
   memberName: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900] },
   memberPhone: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500], marginTop: 2 },
-  role: { fontFamily: Fonts.outfit.medium, fontSize: 11, color: Colors.brand, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.3 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
+  orderHint: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  penaltyHint: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.danger },
+  blockedHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    color: Colors.danger,
+    marginTop: 6,
+    lineHeight: 16,
+  },
   radio: {
     width: 22,
     height: 22,
@@ -210,8 +311,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray[300],
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   radioOn: { borderColor: Colors.danger },
+  radioDisabled: { borderColor: Colors.gray[200] },
   radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.danger },
   field: { marginHorizontal: Theme.spacing.page, marginTop: 8, marginBottom: 16 },
   label: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[700], marginBottom: 8 },
@@ -251,7 +354,4 @@ const styles = StyleSheet.create({
     borderColor: withOpacity(Colors.accent, 0.2),
   },
   legalText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[700], lineHeight: 19 },
-  emptyBox: { alignItems: 'center', padding: 40, gap: 8 },
-  emptyTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[600] },
-  emptyLink: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.brand, marginTop: 8 },
 });

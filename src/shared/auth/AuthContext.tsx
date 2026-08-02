@@ -12,6 +12,7 @@ import { parseAuthUser } from './types';
 import { loadUserFromApi, refreshAccessToken } from './authApi';
 import { loadCurrentUser, setSessionExpiredHandler } from './fetchWithAuth';
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from './tokenStorage';
+import { unregisterDeviceToken } from '@/modules/notifications/services/pushRegistration';
 
 type SignInPayload = {
   access: string;
@@ -93,6 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Désinscrire le token push AVANT de vider les tokens d'auth : l'appel
+    // DELETE /devices/ nécessite encore un access token valide.
+    await unregisterDeviceToken().catch(() => {});
     await clearTokens();
     setUser(null);
   }, []);

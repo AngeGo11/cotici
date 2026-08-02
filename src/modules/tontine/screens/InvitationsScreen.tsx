@@ -4,11 +4,10 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   TextInput,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button, Card, EmptyState, Skeleton } from '@/shared/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -190,32 +189,37 @@ export default function InvitationsScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={Colors.brand} />
+          <View style={styles.skeletonList}>
+            {[0, 1].map((i) => (
+              <Card key={i} variant="soft" style={styles.skeletonCard}>
+                <View style={styles.topRow}>
+                  <Skeleton shape="circle" width={36} height={36} />
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Skeleton shape="text" width="70%" />
+                    <Skeleton shape="text" width="45%" height={11} />
+                  </View>
+                </View>
+                <Skeleton shape="card" height={44} style={{ marginTop: Theme.spacing.md }} />
+              </Card>
+            ))}
           </View>
         ) : error ? (
           <View style={styles.centered}>
             <Text style={styles.errorText}>{error}</Text>
-            <AnimatedPressable style={styles.retryButton} onPress={() => void load()}>
-              <Text style={styles.retryText}>Réessayer</Text>
-            </AnimatedPressable>
+            <Button label="Réessayer" variant="secondary" size="sm" fullWidth={false} onPress={() => void load()} />
           </View>
         ) : items.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={styles.emptyIcon}>
-              <Feather name="mail" size={26} color={Colors.gray[400]} />
-            </View>
-            <Text style={styles.emptyTitle}>Aucune invitation en attente</Text>
-            <Text style={styles.emptyText}>
-              Les invitations envoyées à votre numéro apparaîtront ici.
-            </Text>
-          </View>
+          <EmptyState
+            icon="mail"
+            title="Aucune invitation en attente"
+            description="Les invitations envoyées à votre numéro apparaîtront ici."
+          />
         ) : (
           items.map((invitation) => {
             const busy = busyToken === invitation.token;
             const freq = invitation.frequence ? frequenceLabel[invitation.frequence] ?? invitation.frequence : null;
             return (
-              <View key={invitation.token} style={styles.card}>
+              <Card key={invitation.token} variant="soft" style={styles.card}>
                 <View style={styles.topRow}>
                   <View style={styles.iconWrap}>
                     <Feather name="users" size={18} color={Colors.brand} />
@@ -246,24 +250,28 @@ export default function InvitationsScreen() {
                 </View>
 
                 <View style={styles.actionsRow}>
-                  <AnimatedPressable
-                    style={[styles.acceptButton, busy && styles.buttonDisabled]}
-                    onPress={() => openRules(invitation)}
-                    disabled={busy}
-                  >
-                    <Feather name="file-text" size={16} color={Colors.white} />
-                    <Text style={styles.acceptText}>Voir les règles</Text>
-                  </AnimatedPressable>
-                  <AnimatedPressable
-                    style={[styles.rejectButton, busy && styles.buttonDisabled]}
-                    onPress={() => refuse(invitation)}
-                    disabled={busy}
-                  >
-                    <Feather name="x" size={16} color={Colors.danger} />
-                    <Text style={styles.rejectText}>Refuser</Text>
-                  </AnimatedPressable>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Voir les règles"
+                      leftIcon="file-text"
+                      onPress={() => openRules(invitation)}
+                      disabled={busy}
+                      size="sm"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Refuser"
+                      leftIcon="x"
+                      variant="danger"
+                      onPress={() => refuse(invitation)}
+                      disabled={busy}
+                      loading={busy}
+                      size="sm"
+                    />
+                  </View>
                 </View>
-              </View>
+              </Card>
             );
           })
         )}
@@ -335,34 +343,11 @@ const styles = StyleSheet.create({
   joinButtonDisabled: { opacity: 0.5 },
   centered: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
   errorText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.danger, textAlign: 'center', paddingHorizontal: Theme.spacing.page },
-  retryButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: withOpacity(Colors.brand, 0.12),
-  },
-  retryText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.brand },
-  emptyWrap: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 32 },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.gray[100],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyTitle: { fontFamily: Fonts.outfit.semiBold, fontSize: 16, color: Colors.gray[800], marginBottom: 6 },
-  emptyText: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500], textAlign: 'center' },
+  skeletonList: { paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md },
+  skeletonCard: { marginBottom: 0 },
   card: {
     marginHorizontal: Theme.spacing.page,
     marginBottom: 12,
-    borderRadius: Theme.radius.md,
-    padding: 14,
-    backgroundColor: Theme.screen.surface,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
   },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   iconWrap: {
@@ -379,27 +364,4 @@ const styles = StyleSheet.create({
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   infoText: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[600] },
   actionsRow: { flexDirection: 'row', gap: 8 },
-  acceptButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.brand,
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  rejectButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: withOpacity(Colors.danger, 0.1),
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  acceptText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.white },
-  rejectText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.danger },
 });

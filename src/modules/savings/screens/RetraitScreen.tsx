@@ -5,9 +5,9 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button, ConfirmSheet, SelectableRow } from '@/shared/ui';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -44,6 +44,7 @@ export default function RetraitScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [confirmSheetOpen, setConfirmSheetOpen] = useState(false);
 
   const amountNum = useMemo(() => {
     const n = Number(amountRaw.replace(/\s/g, '').replace(',', '.'));
@@ -70,7 +71,9 @@ export default function RetraitScreen() {
   }, [user?.numero_telephone, phoneNumber]);
 
   const handleConfirmWithdrawal = async () => {
-    if (!selectedProvider || !canSubmit) return;
+    // Garde synchrone en plus de `disabled` : sur un re-render tardif (Android bas de
+    // gamme), deux taps rapprochés pourraient sinon déclencher deux appels réseau.
+    if (isSubmitting || !selectedProvider || !canSubmit) return;
 
     setIsSubmitting(true);
     setErrorMessage('');
@@ -81,16 +84,33 @@ export default function RetraitScreen() {
     });
 
     if (!result.ok) {
+      // En mode CinetPay réel, une erreur 502 à l'initiation signifie que le
+      // montant a déjà été débité PUIS recrédité par le backend : le solde a donc
+      // bougé deux fois. On l'affiche tel quel (le backend le précise déjà) et on
+      // rafraîchit le solde pour refléter le recrédit.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      await refreshUser();
       setErrorMessage(result.detail);
       setIsSubmitting(false);
+      setConfirmSheetOpen(false);
       return;
     }
 
     await refreshUser();
     setIsSubmitting(false);
+    setConfirmSheetOpen(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+    // En mode CinetPay réel, le solde est déjà débité mais le transfert Mobile
+    // Money est encore en cours (il peut encore échouer et être recrédité) :
+    // on route vers un écran "en attente" distinct plutôt que "réussi".
+    const isPending = result.data.statut_transaction === 'EN ATTENTE';
     router.push({
       pathname: '/success',
-      params: { type: 'withdrawal', ref: result.data.ref_transaction },
+      params: {
+        type: isPending ? 'withdrawal-pending' : 'withdrawal',
+        ref: result.data.ref_transaction,
+      },
     });
   };
 
@@ -199,33 +219,16 @@ export default function RetraitScreen() {
           </Text>
         </View>
         <View style={styles.providerList}>
-          {providers.map((p) => {
-            const selected = selectedProvider === p.id;
-            return (
-              <AnimatedPressable
-                key={p.id}
-                style={[styles.providerRow, selected && styles.providerRowSelected]}
-                onPress={() => setSelectedProvider(p.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={`${p.name}, Mobile Money`}
-              >
-                <View style={styles.providerRowLogo}>
-                  <PaymentProviderMark providerId={p.id} maxWidth={64} maxHeight={28} />
-                </View>
-                <View style={styles.providerRowDivider} />
-                <View style={styles.providerRowText}>
-                  <Text style={styles.providerRowTitle} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={styles.providerRowSubtitle}>Mobile Money</Text>
-                </View>
-                <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
-                  {selected ? <View style={styles.radioInner} /> : null}
-                </View>
-              </AnimatedPressable>
-            );
-          })}
+          {providers.map((p) => (
+            <SelectableRow
+              key={p.id}
+              leading={<PaymentProviderMark providerId={p.id} maxWidth={64} maxHeight={28} />}
+              title={p.name}
+              subtitle="Mobile Money"
+              selected={selectedProvider === p.id}
+              onPress={() => setSelectedProvider(p.id)}
+            />
+          ))}
         </View>
 
         <View style={styles.sectionHead}>
@@ -234,13 +237,16 @@ export default function RetraitScreen() {
         <View style={styles.surfaceCard}>
           <Text style={styles.inCardLabel}>Téléphone qui recevra le transfert</Text>
           <TextInput
-            style={[styles.inputBare, tabularAmount]}
+            style={[styles.inputBare, styles.inputBareReadOnly, tabularAmount]}
             value={phoneNumber}
-            onChangeText={setPhoneNumber}
+            editable={false}
             keyboardType="phone-pad"
             placeholder="+225 …"
             placeholderTextColor={Colors.gray[400]}
           />
+          <Text style={styles.inputHint}>
+            Le retrait est envoyé au numéro Mobile Money lié à votre compte COTICI.
+          </Text>
         </View>
 
         {newBalance !== null ? (
@@ -263,7 +269,7 @@ export default function RetraitScreen() {
 
         {errorMessage ? (
           <View style={styles.errorCard}>
-            <Feather name="alert-circle" size={20} color={Colors.accent} />
+            <Feather name="alert-circle" size={20} color={Colors.danger} />
             <Text style={styles.errorBannerText}>{errorMessage}</Text>
           </View>
         ) : null}
@@ -277,21 +283,33 @@ export default function RetraitScreen() {
           </Text>
         </View>
 
-        <AnimatedPressable
-          style={[styles.confirmButton, !canSubmit && styles.confirmDisabled]}
+        <Button
+          label="Confirmer le retrait"
+          size="lg"
+          leftIcon="arrow-up-right"
           disabled={!canSubmit}
-          onPress={() => void handleConfirmWithdrawal()}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Text style={[styles.confirmText, !canSubmit && { color: Colors.gray[400] }]}>
-              Confirmer le retrait
-            </Text>
-          )}
-        </AnimatedPressable>
+          onPress={() => setConfirmSheetOpen(true)}
+          style={styles.confirmButtonWrap}
+        />
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmSheetOpen}
+        title="Confirmer le retrait"
+        description={
+          selectedProvider && newBalance !== null
+            ? `Retirer ${formatMoney(amountNum)} FCFA vers ${
+                providers.find((p) => p.id === selectedProvider)?.name ?? 'votre opérateur'
+              }. Nouveau solde : ${formatMoney(newBalance)} FCFA.`
+            : ''
+        }
+        confirmLabel="Confirmer"
+        confirmVariant="primary"
+        loading={isSubmitting}
+        onConfirm={() => void handleConfirmWithdrawal()}
+        onCancel={() => setConfirmSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -479,77 +497,10 @@ const styles = StyleSheet.create({
   },
   quickChipTextDisabled: { color: Colors.gray[400] },
   quickChipTextSelected: { color: Colors.brand },
-  /** Liste type « carte de paiement » : logo | séparateur | libellés | radio */
   providerList: {
     paddingHorizontal: Theme.spacing.page,
     gap: Theme.spacing.md,
     marginBottom: Theme.spacing.xl,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-    paddingVertical: 14,
-    paddingLeft: Theme.spacing.lg,
-    paddingRight: Theme.spacing.md,
-    minHeight: 72,
-    ...Theme.shadow.soft,
-  },
-  providerRowSelected: {
-    borderColor: Colors.gray[900],
-    borderWidth: 1.5,
-  },
-  providerRowLogo: {
-    width: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  providerRowDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.gray[200],
-    marginHorizontal: Theme.spacing.md,
-  },
-  providerRowText: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  providerRowTitle: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Colors.gray[900],
-    letterSpacing: -0.2,
-  },
-  providerRowSubtitle: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.gray[500],
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.gray[300],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Theme.spacing.sm,
-  },
-  radioOuterOn: {
-    borderColor: Colors.gray[900],
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.gray[900],
   },
   inputBare: {
     fontFamily: Fonts.outfit.medium,
@@ -563,6 +514,14 @@ const styles = StyleSheet.create({
     borderRadius: Theme.radius.sm,
     borderWidth: 1,
     borderColor: Colors.gray[100],
+  },
+  inputBareReadOnly: { color: Colors.gray[600] },
+  inputHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.gray[500],
+    marginTop: Theme.spacing.sm,
   },
   previewCard: {
     marginHorizontal: Theme.spacing.page,
@@ -645,9 +604,9 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.lg,
     padding: Theme.spacing.lg,
     borderRadius: Theme.radius.lg,
-    backgroundColor: withOpacity(Colors.accent, 0.1),
+    backgroundColor: withOpacity(Colors.danger, 0.08),
     borderWidth: 1,
-    borderColor: withOpacity(Colors.accent, 0.2),
+    borderColor: withOpacity(Colors.danger, 0.2),
   },
   errorBannerText: {
     flex: 1,
@@ -656,19 +615,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: Colors.gray[700],
   },
-  confirmButton: {
+  confirmButtonWrap: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Colors.brand,
-    paddingVertical: 18,
-    borderRadius: Theme.radius.md,
-    alignItems: 'center',
-    ...Theme.shadow.soft,
-  },
-  confirmDisabled: { backgroundColor: Colors.gray[200], shadowOpacity: 0, elevation: 0 },
-  confirmText: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 17,
-    letterSpacing: 0.2,
-    color: Colors.white,
   },
 });

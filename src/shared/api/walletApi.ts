@@ -1,20 +1,46 @@
 import type { PaymentProvider } from '@/types';
 import { requestWithAuth } from './authFetch';
 
+/**
+ * Statuts possibles renvoyés par le backend pour une transaction wallet.
+ * Valeurs exactes avec accents — ne pas normaliser côté client.
+ */
+export type WalletTransactionStatus = 'EN ATTENTE' | 'RÉUSSIE' | 'ÉCHOUÉE' | 'ANNULÉE';
+
+/**
+ * En mode sandbox (dev), le dépôt est crédité immédiatement : `ancien_solde` et
+ * `nouveau_solde` sont renvoyés, `sandbox: true`.
+ * En mode CinetPay réel (prod), le wallet n'est PAS encore crédité : le backend
+ * renvoie `payment_url` (à ouvrir) et `statut_transaction: "EN ATTENTE"`, sans
+ * `ancien_solde`/`nouveau_solde`.
+ */
 export type DepositResponse = {
   numero_telephone_utilise: string;
-  ancien_solde: string;
   montant_depot: string;
-  nouveau_solde: string;
   ref_transaction: string;
+  ancien_solde?: string;
+  nouveau_solde?: string;
+  payment_url?: string;
+  statut_transaction?: WalletTransactionStatus;
+  sandbox?: boolean;
+  idempotent_replay?: boolean;
 };
 
+/**
+ * En mode sandbox (dev), le retrait débite et confirme immédiatement.
+ * En mode CinetPay réel (prod), le wallet est déjà débité (`nouveau_solde` présent)
+ * mais le transfert Mobile Money est encore en cours : `statut_transaction: "EN ATTENTE"`.
+ * Il peut échouer plus tard, auquel cas le backend recrédite automatiquement.
+ */
 export type WithdrawalResponse = {
   numero_telephone_utilise: string;
-  ancien_solde: string;
   montant_retire: string;
-  nouveau_solde: string;
   ref_transaction: string;
+  ancien_solde?: string;
+  nouveau_solde?: string;
+  statut_transaction?: WalletTransactionStatus;
+  sandbox?: boolean;
+  idempotent_replay?: boolean;
 };
 
 export type WalletTransaction = {
@@ -78,7 +104,7 @@ export async function submitWalletDeposit(
   }
 
   const data = body as DepositResponse;
-  if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
+  if (typeof data?.ref_transaction !== 'string') {
     return { ok: false, detail: 'Réponse serveur invalide.' };
   }
 
@@ -107,7 +133,7 @@ export async function submitWalletWithdrawal(
   }
 
   const data = body as WithdrawalResponse;
-  if (typeof data?.nouveau_solde !== 'string' || typeof data?.ref_transaction !== 'string') {
+  if (typeof data?.ref_transaction !== 'string') {
     return { ok: false, detail: 'Réponse serveur invalide.' };
   }
 
@@ -132,4 +158,21 @@ export async function fetchWalletTransactions(): Promise<
     return { ok: false, detail: 'Réponse serveur invalide.' };
   }
   return { ok: true, data };
+}
+
+/**
+ * Brique de polling : le backend n'expose pas d'endpoint "get one transaction by
+ * ref", on retrouve donc le statut courant d'une transaction (identifiée par sa
+ * `ref_transaction`) dans les 50 dernières transactions du wallet.
+ * Renvoie `null` si la transaction n'apparaît pas encore dans la liste.
+ */
+export async function fetchTransactionStatus(
+  ref: string,
+): Promise<
+  { ok: true; data: WalletTransaction | null } | { ok: false; detail: string }
+> {
+  const result = await fetchWalletTransactions();
+  if (!result.ok) return result;
+  const tx = result.data.results.find((t) => t.ref_transaction === ref) ?? null;
+  return { ok: true, data: tx };
 }

@@ -251,6 +251,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && req.url === "/api/tontine/archive/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/archive/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/tontine/delete/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/tontine/delete/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
   if (req.method === "GET" && req.url.startsWith("/api/tontine/chat/") && !req.url.startsWith("/api/tontine/chat/send")) {
     const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
     await proxyToDjango(req, res, {
@@ -298,6 +314,22 @@ const server = http.createServer(async (req, res) => {
     await proxyToDjango(req, res, {
       method: "GET",
       upstreamPath: "/api/solidarity/contributions/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/solidarity/archive/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/solidarity/archive/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/solidarity/delete/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/solidarity/delete/",
       forwardBearer: true,
     });
     return;
@@ -406,6 +438,131 @@ const server = http.createServer(async (req, res) => {
     await proxyToDjango(req, res, {
       method: "PATCH",
       upstreamPath: "/api/savings/update/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const notificationsMarkReadMatch = req.url.match(/^\/api\/notifications\/(\d+)\/mark_read\/?(?:\?.*)?$/);
+  if (req.method === "POST" && notificationsMarkReadMatch) {
+    await proxyToDjango(req, res, {
+      upstreamPath: `/api/notifications/${notificationsMarkReadMatch[1]}/mark_read/`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/notifications/mark_all_read/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/notifications/mark_all_read/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/notifications/unread_count/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/notifications/unread_count/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.match(/^\/api\/notifications\/?(?:\?.*)?$/)) {
+    const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/notifications/${query}`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/notifications/devices/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/notifications/devices/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const notificationsDeviceDeleteMatch = req.url.match(/^\/api\/notifications\/devices\/([^/]+)\/?(?:\?.*)?$/);
+  if (req.method === "DELETE" && notificationsDeviceDeleteMatch) {
+    await proxyToDjango(req, res, {
+      method: "DELETE",
+      upstreamPath: `/api/notifications/devices/${notificationsDeviceDeleteMatch[1]}/`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/notifications/preferences/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/notifications/preferences/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "PATCH" && req.url === "/api/notifications/preferences/") {
+    await proxyToDjango(req, res, {
+      method: "PATCH",
+      upstreamPath: "/api/notifications/preferences/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/cagnotte/create/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/cagnotte/create/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/cagnotte/cotiser/") {
+    await proxyToDjango(req, res, {
+      upstreamPath: "/api/cagnotte/cotiser/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/cagnotte/mine/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/cagnotte/mine/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/cagnotte/contributions/") {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: "/api/cagnotte/contributions/",
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const cagnottePreviewMatch = req.url.match(/^\/api\/cagnotte\/(\d+)\/preview\/?(?:\?.*)?$/);
+  if (req.method === "GET" && cagnottePreviewMatch) {
+    await proxyToDjango(req, res, {
+      method: "GET",
+      upstreamPath: `/api/cagnotte/${cagnottePreviewMatch[1]}/preview/`,
+      forwardBearer: true,
+    });
+    return;
+  }
+
+  const cagnotteVerserMatch = req.url.match(/^\/api\/cagnotte\/(\d+)\/verser\/?(?:\?.*)?$/);
+  if (req.method === "POST" && cagnotteVerserMatch) {
+    await proxyToDjango(req, res, {
+      upstreamPath: `/api/cagnotte/${cagnotteVerserMatch[1]}/verser/`,
       forwardBearer: true,
     });
     return;

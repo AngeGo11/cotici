@@ -10,7 +10,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.audits.models import AuditLog
 from apps.cagnotte.models import Cagnotte
+from apps.notifications.domain.catalog import spec_paiement_valide
+from apps.notifications.services.notification_service import NotificationService
+from apps.cagnotte.serializers import CotiserCagnotteSerializer, CreateCagnotteSerializer
 from apps.solidarity.models import Solidarity
 from apps.tontine.helpers import display_name_user, phones_match
 from apps.tontine.models import Tontine, TontineMembre
@@ -18,9 +22,8 @@ from apps.tontine.permissions import user_is_tontine_admin
 from apps.utils.utilitaires import (
     _generate_qr_payload,
     _normalize_phone,
-    _parse_positive_decimal,
-    _parse_positive_int,
-    _resolve_payment_mode,
+    _paginate_and_serialize,
+    _resolve_user_by_phone_exact,
     _unique_ref,
 )
 from apps.wallet.models import Transaction, Wallet
@@ -33,10 +36,7 @@ def health(request):
 
 
 def _resolve_user_by_phone(phone_raw: str):
-    phone = _normalize_phone(str(phone_raw or ""))
-    if not phone or len(phone) < 8:
-        return None
-    return User.objects.filter(numero_telephone__icontains=phone[-10:]).first()
+    return _resolve_user_by_phone_exact(phone_raw)
 
 
 def _get_cagnotte_by_id(tontine_id) -> Optional[Cagnotte]:
@@ -45,7 +45,7 @@ def _get_cagnotte_by_id(tontine_id) -> Optional[Cagnotte]:
             pk=tontine_id,
             type_tontine=Tontine.TYPE_TONTINE.CAGNOTTE,
         )
-    except (Solidarity.DoesNotExist, ValueError, TypeError):
+    except (Cagnotte.DoesNotExist, ValueError, TypeError):
         return None
 
 
@@ -101,6 +101,7 @@ def _serialize_cagnotte(cagnotte: Cagnotte, *, for_user=None) -> dict:
     data = {
         "id": cagnotte.id,
         "type_tontine": cagnotte.type_tontine,
+        "nom_cagnotte": cagnotte.nom_cagnotte,
         "motif": (cagnotte.description or "").strip(),
         "objectif_collecte": int(objectif),
         "montant_collecte": int(collecte),
@@ -125,33 +126,12 @@ def _serialize_cagnotte(cagnotte: Cagnotte, *, for_user=None) -> dict:
 @permission_classes([IsAuthenticated])
 def create_cagnotte(request):
     """Création d'une tontine solidaire via le modèle Cagnotte."""
-    nom_cagnotte = _normalize_phone(str(request.data.get("nom_cagnotte") or ""))
-    if not nom_cagnotte:
-        return Response(
-            {"detail": "Le nom de la cagnotte est obligatoire."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-
-
-    description_projet = str(request.data.get("description_projet") or "").strip()
-    if not description_projet:
-        return Response(
-            {"detail": "La description_projet est obligatoire."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if len(description_projet) > 300:
-        return Response(
-            {"detail": "Le description_projet est trop long (300 caractères max)."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    objectif = _parse_positive_int(request.data.get("objectif_collecte"))
-    if objectif is None:
-        return Response(
-            {"detail": "L'objectif de la collecte doit être un montant entier positif."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    serializer = CreateCagnotteSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"detail": serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST)
+    nom_cagnotte = serializer.validated_data["nom_cagnotte"]
+    description_projet = serializer.validated_data["description_projet"]
+    objectif = serializer.validated_data["objectif_collecte"]
 
     user = request.user
 
@@ -208,12 +188,17 @@ def cagnotte_preview(request, tontine_id):
 @permission_classes([IsAuthenticated])
 def list_my_cagnotte(request):
     """Cagnotte dont l'utilisateur connecté est l'organisateur/hôte."""
+    # Bug pré-existant corrigé : interrogeait Solidarity au lieu de Cagnotte, ce qui
+    # provoquait un AttributeError dès la sérialisation (recuperation_effectue
+    # n'existe pas sur Solidarity) ou mélangeait les deux types de collecte.
     qs = (
-        Solidarity.objects.filter(hote=request.user)
+        Cagnotte.objects.filter(hote=request.user)
+        .select_related("hote")
         .order_by("-date_creation")
     )
-    results = [_serialize_cagnotte(s, for_user=request.user) for s in qs]
-    return Response({"count": len(results), "results": results})
+    return Response(
+        _paginate_and_serialize(request, qs, lambda s: _serialize_cagnotte(s, for_user=request.user))
+    )
 
 
 @api_view(["GET"])
@@ -239,11 +224,11 @@ def list_my_contributions_to_cagnotte(request):
     qs = (
         Cagnotte.objects.filter(pk__in=tontine_ids)
         .exclude(hote=user)
+        .select_related("hote")
         .order_by("-date_creation")
     )
 
-    results = []
-    for cagnotte in qs:
+    def _serialize_with_contribution(cagnotte):
         data = _serialize_cagnotte(cagnotte, for_user=user)
         montant_user = (
             Transaction.objects.filter(
@@ -254,18 +239,22 @@ def list_my_contributions_to_cagnotte(request):
             ).aggregate(total=Sum("montant_transaction"))["total"]
         )
         data["montant_contribue"] = int(montant_user or 0)
-        results.append(data)
+        return data
 
-    return Response({"count": len(results), "results": results})
+    return Response(_paginate_and_serialize(request, qs, _serialize_with_contribution))
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def cotiser_tontine(request):
     """Participation libre à une cagnotte (ouverte à tout utilisateur Cotici)."""
-    tontine_id = request.data.get("tontine_id")
-    if tontine_id in (None, ""):
-        return Response({"detail": "tontine_id requis."}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = CotiserCagnotteSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"detail": serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST)
+    tontine_id = serializer.validated_data["tontine_id"]
+    montant = serializer.validated_data["montant"]
+    mode = serializer.validated_data["mode_de_paiement"]
+    idempotency_key = serializer.validated_data["idempotency_key"]
 
     cagnotte = _get_cagnotte_by_id(tontine_id)
     if cagnotte is None:
@@ -282,14 +271,6 @@ def cotiser_tontine(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-
-    montant = _parse_positive_decimal(request.data.get("montant"))
-    if montant is None:
-        return Response(
-            {"detail": "Veuillez renseigner un montant de participation valide."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     objectif = _get_objectif_collecte(cagnotte)
     if objectif is None:
         return Response(
@@ -297,26 +278,64 @@ def cotiser_tontine(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if cagnotte.objectif_atteint:
-        return Response(
-            {"detail": "L'objectif de la collecte est déjà atteint."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    collecte_actuelle = _montant_collecte(cagnotte)
-    if collecte_actuelle >= objectif:
-        return Response(
-            {"detail": "L'objectif de la collecte est déjà atteint."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    mode = _resolve_payment_mode(request.data.get("mode_de_paiement"))
-    if mode is None:
-        mode = Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI
-
     ref = ""
     with transaction.atomic():
+        # Verrouille la collecte elle-même (pas seulement le wallet du contributeur) :
+        # sans ça, deux contributions concurrentes proches de l'objectif peuvent
+        # toutes les deux passer le contrôle "objectif atteint" et le dépasser.
+        cagnotte_locked = Cagnotte.objects.select_for_update().get(pk=cagnotte.pk)
+
+        if not cagnotte_locked.est_active or cagnotte_locked.recuperation_effectue:
+            return Response(
+                {"detail": "Cette collecte est clôturée."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if cagnotte_locked.objectif_atteint:
+            return Response(
+                {"detail": "L'objectif de la collecte est déjà atteint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        collecte_actuelle = _montant_collecte(cagnotte_locked)
+        if collecte_actuelle >= objectif:
+            return Response(
+                {"detail": "L'objectif de la collecte est déjà atteint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
+
+        # Idempotence : si cette clé client a déjà été utilisée pour ce wallet
+        # (retry réseau, double-tap), on renvoie l'état correspondant à la
+        # contribution déjà enregistrée sans débiter ni cotiser une seconde fois.
+        # Vérification faite APRÈS le verrou sur le wallet (et sur la cagnotte)
+        # pour empêcher une course entre deux requêtes concurrentes portant la
+        # même clé.
+        if idempotency_key:
+            existing = Transaction.objects.filter(
+                wallet=wallet, client_ref=idempotency_key
+            ).first()
+            if existing is not None:
+                collecte_existing = _montant_collecte(cagnotte_locked)
+                return Response(
+                    {
+                        "detail": "Participation enregistrée.",
+                        "ref_transaction": existing.ref_transaction,
+                        "montant_collecte": str(collecte_existing),
+                        "objectif_collecte": str(objectif),
+                        "objectif_atteint": collecte_existing >= objectif,
+                        "tontine": {
+                            "id": cagnotte.id,
+                            "nom_contributeur": display_name_user(user),
+                            "numero_contributeur": getattr(user, "numero_telephone", "") or "",
+                            "montant_verse": str(existing.montant_transaction),
+                        },
+                        "idempotent_replay": True,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
         if wallet.solde_courant < montant:
             return Response({"detail": "Solde insuffisant."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -326,21 +345,23 @@ def cotiser_tontine(request):
         ref = _unique_ref("C")
         Transaction.objects.create(
             wallet=wallet,
-            tontine=cagnotte,
+            tontine=cagnotte_locked,
             solde_courant=wallet.solde_courant,
             ref_transaction=ref,
+            client_ref=idempotency_key,
             mode_de_paiement=mode,
             montant_transaction=montant,
             statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-            type_transaction=Transaction.TYPE_TRANSACTION.CONTRIBUTION_SOLIDAIRE,
+            # Bug pré-existant corrigé : ce type était CONTRIBUTION_SOLIDAIRE, ce qui
+            # rendait la collecte invisible à _montant_collecte() (qui filtre sur
+            # CONTRIBUTION_CAGNOTTE) et bloquait le versement à vie.
+            type_transaction=Transaction.TYPE_TRANSACTION.CONTRIBUTION_CAGNOTTE,
         )
 
         nouvelle_collecte = collecte_actuelle + montant
-        if nouvelle_collecte >= objectif and not cagnotte.objectif_atteint:
-            cagnotte.objectif_atteint = True
-            cagnotte.save(update_fields=["objectif_atteint"])
-
-    nouvelle_collecte = collecte_actuelle + montant
+        if nouvelle_collecte >= objectif and not cagnotte_locked.objectif_atteint:
+            cagnotte_locked.objectif_atteint = True
+            cagnotte_locked.save(update_fields=["objectif_atteint"])
 
     return Response(
         {
@@ -390,21 +411,22 @@ def recuperation_collecte(request, tontine_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    collecte = _montant_collecte(cagnotte)
-    if collecte < objectif:
-        return Response(
-            {"detail": "L'objectif n'est pas encore atteint."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-
-
     ref = ""
     with transaction.atomic():
         cagnotte_locked = Cagnotte.objects.select_for_update().get(pk=cagnotte.pk)
         if cagnotte_locked.recuperation_effectue:
             return Response(
                 {"detail": "Le versement a déjà été effectué."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Recalculé sous verrou : une lecture avant le select_for_update() peut être
+        # périmée par une contribution qui s'intercale, ce qui verserait un montant
+        # inférieur à ce qui a réellement été débité aux contributeurs (perte de fonds).
+        collecte = _montant_collecte(cagnotte_locked)
+        if collecte < objectif:
+            return Response(
+                {"detail": "L'objectif n'est pas encore atteint."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -422,7 +444,8 @@ def recuperation_collecte(request, tontine_id):
             mode_de_paiement=Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI,
             montant_transaction=collecte,
             statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-            type_transaction=Transaction.TYPE_TRANSACTION.VERSEMENT_SOLIDAIRE,
+            # Bug pré-existant corrigé (voir cotiser_tontine) : c'était VERSEMENT_SOLIDAIRE.
+            type_transaction=Transaction.TYPE_TRANSACTION.VERSEMENT_CAGNOTTE,
         )
 
         cagnotte_locked.recuperation_effectue = True
@@ -430,6 +453,29 @@ def recuperation_collecte(request, tontine_id):
         cagnotte_locked.est_active = False
         cagnotte_locked.save(
             update_fields=["recuperation_effectue", "objectif_atteint", "est_active"]
+        )
+
+        AuditLog.objects.create(
+            user=organizer,
+            user_display=display_name_user(organizer),
+            action=AuditLog.Action.PAYOUT_EXECUTED,
+            resource=(
+                f"cagnotte:{cagnotte_locked.pk}:transaction:{ref}:montant={collecte}"
+            ),
+            status=AuditLog.Status.SUCCESS,
+        )
+
+        # Le récupérateur (organisateur/hôte, crédité ci-dessus) est le destinataire —
+        # pas nécessairement request.user si un autre admin déclenche la récupération.
+        NotificationService.emit(
+            destinataire=organizer,
+            spec=spec_paiement_valide(
+                kind="versement",
+                montant=collecte,
+                ref=ref,
+                source_type="cagnotte",
+                source_id=cagnotte_locked.pk,
+            ),
         )
 
     return Response(

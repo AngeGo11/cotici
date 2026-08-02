@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, EmptyState } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -53,7 +53,7 @@ function GoalBar({ pct }: { pct: number }) {
 
 export default function SavingsListScreen() {
   const router = useRouter();
-  const { goals, loading, error } = useSavingsGoals();
+  const { goals, loading, error, reload } = useSavingsGoals();
   const {
     goals: archivedGoals,
     loading: loadingArchived,
@@ -109,19 +109,23 @@ export default function SavingsListScreen() {
         ) : null}
 
         {!loading && error ? (
-          <View style={styles.messageCard}>
-            <Feather name="alert-circle" size={20} color={Colors.accent} />
-            <Text style={styles.messageText}>{error}</Text>
-          </View>
+          <EmptyState
+            icon="alert-circle"
+            title="Impossible de charger vos objectifs"
+            description={error}
+            actionLabel="Réessayer"
+            onAction={() => void reload()}
+          />
         ) : null}
 
         {!loading && !error && goals.length === 0 ? (
-          <View style={styles.messageCard}>
-            <Feather name="inbox" size={20} color={Colors.gray[500]} />
-            <Text style={styles.messageText}>
-              Aucun objectif pour le moment. Créez votre premier projet d&apos;épargne.
-            </Text>
-          </View>
+          <EmptyState
+            icon="target"
+            title="Aucun objectif pour le moment"
+            description="Créez votre premier projet d'épargne pour commencer à suivre vos progrès."
+            actionLabel="Créer un objectif"
+            onAction={() => router.push('/create-savings')}
+          />
         ) : null}
 
         {goals.map((goal) => (
@@ -352,26 +356,6 @@ const styles = StyleSheet.create({
   newProjectTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900], marginBottom: 2 },
   newProjectSub: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
   loader: { marginVertical: Theme.spacing.xl },
-  messageCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Theme.spacing.md,
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.lg,
-    padding: Theme.spacing.lg,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.screen.surface,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
-  },
-  messageText: {
-    flex: 1,
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    color: Colors.gray[600],
-    lineHeight: 20,
-  },
   goalCardArchived: {
     opacity: 0.92,
     backgroundColor: Colors.gray[50],

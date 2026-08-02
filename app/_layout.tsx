@@ -18,6 +18,7 @@ import {
 } from '@expo-google-fonts/outfit';
 import { AuthProvider } from '@/shared/auth';
 import { stackModalScreenOptions, stackScreenOptions } from '@/shared/ui';
+import { NotificationsGate } from '@/modules/notifications/components/NotificationsGate';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -40,6 +41,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <StatusBar style="dark" />
+        <NotificationsGate />
         <Stack screenOptions={stackScreenOptions}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
@@ -57,6 +59,9 @@ export default function RootLayout() {
         />
         <Stack.Screen name="modifier-regles" />
         <Stack.Screen name="exclure-membre" />
+        <Stack.Screen name="parametres-groupe" />
+        <Stack.Screen name="membres-groupe" />
+        <Stack.Screen name="penalites" />
         <Stack.Screen name="create-savings" />
         <Stack.Screen name="create-classic-tontine" />
         <Stack.Screen name="create-solidarity-tontine" />
@@ -65,6 +70,8 @@ export default function RootLayout() {
         <Stack.Screen name="create-personal-goal" />
         <Stack.Screen name="modifier-objectif" />
         <Stack.Screen name="create-association-fund" />
+        <Stack.Screen name="cagnotte-share" />
+        <Stack.Screen name="cagnotte-collect/[id]" />
         <Stack.Screen name="choose-tontine-cotisation" />
         <Stack.Screen name="make-deposit" options={stackModalScreenOptions} />
         <Stack.Screen name="deposit-to-account" options={stackModalScreenOptions} />
@@ -72,6 +79,7 @@ export default function RootLayout() {
         <Stack.Screen name="activites-recentes" />
         <Stack.Screen name="prochaines-echeances" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="notification-preferences" />
         <Stack.Screen name="invitations" />
         <Stack.Screen name="join-tontine-rules" />
         <Stack.Screen name="new-invitation" />

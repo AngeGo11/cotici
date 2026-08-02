@@ -114,7 +114,7 @@ export default function CreateAccountScreen() {
         },
       });
     } catch {
-      setErrorMessage('Serveur inaccessible. Vérifie backend et proxy.');
+      setErrorMessage('Connexion impossible. Vérifiez votre connexion internet et réessayez.');
     } finally {
       setIsSubmitting(false);
     }

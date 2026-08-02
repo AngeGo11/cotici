@@ -5,13 +5,14 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button, Card, ConfirmSheet, InfoBanner, Skeleton, StatusBadge } from '@/shared/ui';
+import type { StatusTone } from '@/shared/ui';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -20,7 +21,9 @@ import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { useAuth } from '@/shared/auth';
 import {
+  archiveSolidarityCollect,
   cotiserSolidarityTontine,
+  deleteSolidarityCollect,
   fetchSolidarityPreview,
   verserSolidarityCollect,
   type SolidarityCollectPreview,
@@ -72,6 +75,10 @@ export default function SolidarityCollectScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveSheetOpen, setArchiveSheetOpen] = useState(false);
+  const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
+  const [payoutSheetOpen, setPayoutSheetOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!collectId) {
@@ -120,53 +127,100 @@ export default function SolidarityCollectScreen() {
     });
     setSubmitting(false);
     if (!result.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Participation impossible', result.detail);
       return;
     }
     setModalVisible(false);
     setAmount('');
     await load();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     router.push({
       pathname: '/success',
       params: { type: 'solidarity-contribution', collectId: String(preview.id) },
     });
   };
 
+  const handleArchivePress = () => {
+    if (!preview) return;
+    setArchiveSheetOpen(true);
+  };
+
+  const confirmArchive = async () => {
+    if (!preview) return;
+    setIsArchiving(true);
+    const result = await archiveSolidarityCollect(preview.id);
+    if (!result.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Erreur', result.detail);
+      setIsArchiving(false);
+      setArchiveSheetOpen(false);
+      return;
+    }
+    setIsArchiving(false);
+    setArchiveSheetOpen(false);
+    router.replace('/(tabs)/tontine');
+  };
+
+  const handleDeletePress = () => {
+    if (!preview) return;
+    setDeleteSheetOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!preview) return;
+    setIsArchiving(true);
+    const result = await deleteSolidarityCollect(preview.id);
+    if (!result.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Erreur', result.detail);
+      setIsArchiving(false);
+      setDeleteSheetOpen(false);
+      return;
+    }
+    setIsArchiving(false);
+    setDeleteSheetOpen(false);
+    router.replace('/(tabs)/tontine');
+  };
+
   const handlePayout = () => {
     if (!preview) return;
+    setPayoutSheetOpen(true);
+  };
+
+  const confirmPayout = async () => {
+    if (!preview) return;
+    setPayingOut(true);
+    const result = await verserSolidarityCollect(preview.id);
+    setPayingOut(false);
+    if (!result.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Erreur', result.detail);
+      setPayoutSheetOpen(false);
+      return;
+    }
+    setPayoutSheetOpen(false);
+    await load();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     Alert.alert(
-      'Valider le versement',
-      `Verser ${formatFcfa(preview.montant_collecte)} au bénéficiaire ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: () => {
-            void (async () => {
-              setPayingOut(true);
-              const result = await verserSolidarityCollect(preview.id);
-              setPayingOut(false);
-              if (!result.ok) {
-                Alert.alert('Erreur', result.detail);
-                return;
-              }
-              await load();
-              Alert.alert(
-                'Versement effectué',
-                `${result.data.montant_verse} FCFA ont été crédités sur le solde Cotici du bénéficiaire.`,
-              );
-            })();
-          },
-        },
-      ],
+      'Versement effectué',
+      `${result.data.montant_verse} FCFA ont été crédités sur le solde Cotici du bénéficiaire.`,
     );
   };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+        <View style={styles.heroBlock}>
+          <Skeleton shape="circle" width={72} height={72} />
+          <View style={{ height: Theme.spacing.lg }} />
+          <Skeleton shape="text" width="55%" height={22} />
+          <View style={{ height: Theme.spacing.sm }} />
+          <Skeleton shape="text" width="40%" height={14} />
+        </View>
+        <View style={{ paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md }}>
+          <Skeleton shape="card" height={150} />
+          <Skeleton shape="card" height={90} />
         </View>
       </SafeAreaView>
     );
@@ -195,11 +249,19 @@ export default function SolidarityCollectScreen() {
         ? 'Collecte en cours'
         : 'Collecte clôturée';
 
-  const statusColor = preview.versement_effectue
-    ? Colors.success
+  const statusTone: StatusTone = preview.versement_effectue
+    ? 'success'
     : preview.objectif_atteint
-      ? Colors.brand
-      : Colors.info;
+      ? 'brand'
+      : 'info';
+
+  const collectEtat = preview.etat ?? 'ACTIF';
+  const isArchivedCollect = collectEtat === 'ARCHIVE';
+  const showLifecycleActions =
+    preview.est_organisateur &&
+    collectEtat === 'ACTIF' &&
+    preview.nb_contributeurs === 0 &&
+    !preview.versement_effectue;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -220,12 +282,11 @@ export default function SolidarityCollectScreen() {
           </Text>
         </View>
 
-        <View style={[styles.statusPill, { backgroundColor: withOpacity(statusColor, 0.1) }]}>
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+        <View style={styles.statusPillWrap}>
+          <StatusBadge label={statusLabel} tone={statusTone} />
         </View>
 
-        <View style={styles.progressCard}>
+        <Card variant="soft" style={styles.progressCard}>
           <View style={styles.progressHeader}>
             <View>
               <Text style={styles.progressLabel}>Collecté</Text>
@@ -241,55 +302,50 @@ export default function SolidarityCollectScreen() {
           {remaining > 0 && !preview.objectif_atteint ? (
             <Text style={styles.remainingText}>Il reste {formatFcfa(remaining)} à collecter</Text>
           ) : null}
-        </View>
+        </Card>
 
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
+          <Card variant="soft" style={styles.statCard}>
             <Feather name="users" size={18} color={Colors.brand} />
             <Text style={styles.statValue}>{preview.nb_contributeurs}</Text>
             <Text style={styles.statLabel}>Contributeurs</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Card>
+          <Card variant="soft" style={styles.statCard}>
             <Feather name="shield" size={18} color={Colors.brand} />
             <Text style={styles.statValue} numberOfLines={1}>
               {preview.est_organisateur ? (preview.beneficiaire_nom ?? '—') : 'Privé'}
             </Text>
             <Text style={styles.statLabel}>Bénéficiaire</Text>
-          </View>
+          </Card>
         </View>
 
         {!preview.est_organisateur ? (
-          <View style={styles.infoBanner}>
-            <Feather name="info" size={16} color={Colors.brand} />
-            <Text style={styles.infoText}>
-              L&apos;identité du bénéficiaire est protégée. Les fonds seront versés sur son solde Cotici
-              une fois l&apos;objectif atteint et validé par l&apos;organisateur.
-            </Text>
-          </View>
+          <InfoBanner
+            icon="info"
+            tone="info"
+            text="L'identité du bénéficiaire est protégée. Les fonds seront versés sur son solde Cotici une fois l'objectif atteint et validé par l'organisateur."
+          />
         ) : null}
 
         {preview.peut_cotiser ? (
-          <AnimatedPressable style={styles.participateButton} onPress={() => setModalVisible(true)}>
-            <Feather name="heart" size={20} color={Colors.white} />
-            <Text style={styles.participateButtonText}>Participer</Text>
-          </AnimatedPressable>
+          <Button
+            label="Participer"
+            size="lg"
+            leftIcon="heart"
+            onPress={() => setModalVisible(true)}
+            style={styles.actionButtonWrap}
+          />
         ) : null}
 
         {preview.peut_valider_versement ? (
-          <AnimatedPressable
-            style={[styles.payoutButton, payingOut && styles.buttonDisabled]}
+          <Button
+            label="Valider le versement au bénéficiaire"
+            size="lg"
+            leftIcon="check-circle"
+            loading={payingOut}
             onPress={handlePayout}
-            disabled={payingOut}
-          >
-            {payingOut ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <>
-                <Feather name="check-circle" size={20} color={Colors.white} />
-                <Text style={styles.payoutButtonText}>Valider le versement au bénéficiaire</Text>
-              </>
-            )}
-          </AnimatedPressable>
+            style={[styles.actionButtonWrap, styles.payoutButtonColor]}
+          />
         ) : null}
 
         {preview.est_organisateur && !preview.versement_effectue ? (
@@ -312,15 +368,14 @@ export default function SolidarityCollectScreen() {
         ) : null}
 
         {preview.est_beneficiaire && preview.objectif_atteint && !preview.versement_effectue ? (
-          <View style={styles.waitBanner}>
-            <Feather name="clock" size={18} color={Colors.info} />
-            <Text style={styles.waitText}>
-              L&apos;objectif est atteint. En attente de validation par l&apos;organisateur.
-            </Text>
-          </View>
+          <InfoBanner
+            icon="clock"
+            tone="info"
+            text="L'objectif est atteint. En attente de validation par l'organisateur."
+          />
         ) : null}
 
-        <View style={styles.beneficiaryBlock}>
+        <Card variant="soft" style={styles.beneficiaryBlock}>
           <Text style={styles.beneficiaryEyebrow}>Bénéficiaire</Text>
           {preview.est_organisateur ? (
             <>
@@ -340,7 +395,32 @@ export default function SolidarityCollectScreen() {
               <Text style={styles.beneficiaryPrivateText}>Marqué privé</Text>
             </View>
           )}
-        </View>
+        </Card>
+
+        {isArchivedCollect ? (
+          <InfoBanner icon="archive" tone="neutral" text="Collecte archivée — consultation seule" />
+        ) : null}
+
+        {showLifecycleActions ? (
+          <View style={styles.lifecycleSection}>
+            <AnimatedPressable
+              style={[styles.archiveButton, isArchiving && styles.buttonDisabled]}
+              onPress={handleArchivePress}
+              disabled={isArchiving}
+            >
+              <Feather name="archive" size={18} color={Colors.gray[700]} />
+              <Text style={styles.archiveButtonText}>Archiver la collecte</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.deleteButton, isArchiving && styles.buttonDisabled]}
+              onPress={handleDeletePress}
+              disabled={isArchiving}
+            >
+              <Feather name="trash-2" size={18} color={Colors.danger} />
+              <Text style={styles.deleteButtonText}>Supprimer la collecte</Text>
+            </AnimatedPressable>
+          </View>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -373,24 +453,59 @@ export default function SolidarityCollectScreen() {
             ) : null}
 
             <View style={styles.modalActions}>
-              <AnimatedPressable style={styles.modalCancel} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Annuler</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={[styles.modalConfirm, !canSubmit && styles.buttonDisabled]}
-                onPress={handleParticipate}
+              <Button
+                label="Annuler"
+                variant="ghost"
+                fullWidth={false}
+                style={[styles.modalButtonFlex, styles.modalCancelBg]}
+                onPress={() => setModalVisible(false)}
+              />
+              <Button
+                label="Confirmer"
+                variant="primary"
+                fullWidth={false}
+                style={styles.modalButtonFlex}
                 disabled={!canSubmit}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={Colors.white} />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Confirmer</Text>
-                )}
-              </AnimatedPressable>
+                loading={submitting}
+                onPress={() => void handleParticipate()}
+              />
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmSheet
+        visible={archiveSheetOpen}
+        title="Archiver cette collecte"
+        description="Elle sera retirée de votre liste active. Vous pourrez toujours consulter son historique."
+        confirmLabel="Archiver"
+        confirmVariant="secondary"
+        loading={isArchiving}
+        onConfirm={() => void confirmArchive()}
+        onCancel={() => setArchiveSheetOpen(false)}
+      />
+
+      <ConfirmSheet
+        visible={deleteSheetOpen}
+        title="Supprimer cette collecte"
+        description="Cette action est définitive. La collecte ne sera plus visible."
+        confirmLabel="Supprimer"
+        confirmVariant="danger"
+        loading={isArchiving}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteSheetOpen(false)}
+      />
+
+      <ConfirmSheet
+        visible={payoutSheetOpen}
+        title="Valider le versement"
+        description={`Verser ${formatFcfa(preview.montant_collecte)} au bénéficiaire ?`}
+        confirmLabel="Confirmer"
+        confirmVariant="primary"
+        loading={payingOut}
+        onConfirm={() => void confirmPayout()}
+        onCancel={() => setPayoutSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -437,27 +552,14 @@ const styles = StyleSheet.create({
     color: Colors.gray[600],
     textAlign: 'center',
   },
-  statusPill: {
+  statusPillWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Theme.radius.pill,
+    justifyContent: 'center',
     marginBottom: Theme.spacing.lg,
   },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontFamily: Fonts.outfit.medium, fontSize: 13 },
   progressCard: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.lg,
     marginBottom: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -485,61 +587,18 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.lg,
-    padding: Theme.spacing.lg,
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
   },
   statValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
   statLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+  actionButtonWrap: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: withOpacity(Colors.brand, 0.06),
-    borderRadius: Theme.radius.lg,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.brand, 0.15),
-  },
-  infoText: {
-    flex: 1,
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: Colors.gray[600],
-    lineHeight: 18,
-  },
-  participateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginHorizontal: Theme.spacing.page,
-    backgroundColor: Colors.brand,
-    paddingVertical: Theme.spacing.lg,
-    borderRadius: Theme.radius.md,
     marginBottom: Theme.spacing.md,
-    ...Theme.shadow.soft,
   },
-  participateButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 17, color: Colors.white },
-  payoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginHorizontal: Theme.spacing.page,
+  payoutButtonColor: {
     backgroundColor: Colors.success,
-    paddingVertical: Theme.spacing.lg,
-    borderRadius: Theme.radius.md,
-    marginBottom: Theme.spacing.md,
   },
-  payoutButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
   shareLinkButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -553,27 +612,10 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
   },
   shareLinkText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.brand },
-  waitBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: Theme.spacing.page,
-    backgroundColor: withOpacity(Colors.info, 0.08),
-    borderRadius: Theme.radius.lg,
-    padding: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.info, 0.15),
-  },
-  waitText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.info, lineHeight: 18 },
   beneficiaryBlock: {
     marginHorizontal: Theme.spacing.page,
     marginTop: Theme.spacing.lg,
-    padding: Theme.spacing.lg,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.screen.surface,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
+    marginBottom: Theme.spacing.lg,
   },
   beneficiaryEyebrow: {
     fontFamily: Fonts.outfit.medium,
@@ -611,6 +653,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gray[600],
   },
+  lifecycleSection: {
+    marginHorizontal: Theme.spacing.page,
+    marginTop: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
+    gap: 12,
+  },
+  archiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: Theme.radius.md,
+    backgroundColor: Theme.screen.surface,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+  },
+  archiveButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[700] },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: Theme.radius.md,
+    backgroundColor: withOpacity(Colors.danger, 0.06),
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.danger, 0.2),
+  },
+  deleteButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.danger },
   buttonDisabled: { opacity: 0.6 },
   modalOverlay: {
     flex: 1,
@@ -641,20 +713,6 @@ const styles = StyleSheet.create({
   },
   inputError: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.danger, marginBottom: 8 },
   modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  modalCancel: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: Theme.radius.md,
-    alignItems: 'center',
-    backgroundColor: Colors.gray[100],
-  },
-  modalCancelText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[700] },
-  modalConfirm: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: Theme.radius.md,
-    alignItems: 'center',
-    backgroundColor: Colors.brand,
-  },
-  modalConfirmText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
+  modalButtonFlex: { flex: 1 },
+  modalCancelBg: { backgroundColor: Colors.gray[100] },
 });

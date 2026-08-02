@@ -14,4 +14,4 @@ class CagnotteAdmin(admin.ModelAdmin):
         "recuperation_effectue",
         "hote",
     )
-    search_fields = ("nom_cagnotte","description")
+    search_fields = ("nom_cagnotte", "description")

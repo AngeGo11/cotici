@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, EmptyState } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -21,7 +21,7 @@ import {
 
 export default function ActivitesRecentesScreen() {
   const router = useRouter();
-  const { activities, loading, error } = useWalletActivities();
+  const { activities, loading, error, reload } = useWalletActivities();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -40,9 +40,21 @@ export default function ActivitesRecentesScreen() {
             <ActivityIndicator color={Colors.success} />
           </View>
         ) : error ? (
-          <Text style={styles.emptyText}>{error}</Text>
+          <EmptyState
+            icon="alert-circle"
+            title="Impossible de charger vos activités"
+            description={error}
+            actionLabel="Réessayer"
+            onAction={() => void reload()}
+          />
         ) : activities.length === 0 ? (
-          <Text style={styles.emptyText}>Aucune activité pour le moment.</Text>
+          <EmptyState
+            icon="inbox"
+            title="Aucune activité pour le moment"
+            description="Vos dépôts, retraits et cotisations apparaîtront ici dès votre première action."
+            actionLabel="Faire un dépôt"
+            onAction={() => router.push('/deposit-to-account')}
+          />
         ) : null}
         {!loading &&
           activities.map((activity) => {
@@ -134,12 +146,4 @@ const styles = StyleSheet.create({
   activityRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   activityAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14 },
   centered: { paddingVertical: 48, alignItems: 'center' },
-  emptyText: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    color: Colors.gray[500],
-    textAlign: 'center',
-    paddingHorizontal: Theme.spacing.page,
-    paddingVertical: 24,
-  },
 });

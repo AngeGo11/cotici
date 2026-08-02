@@ -26,6 +26,9 @@ export type SolidarityCollectPreview = {
   objectif_atteint: boolean;
   versement_effectue: boolean;
   est_active: boolean;
+  etat?: string;
+  date_archivage?: string | null;
+  date_suppression?: string | null;
   nb_contributeurs: number;
   organisateur_nom: string;
   qr_code: string;
@@ -211,4 +214,37 @@ export async function verserSolidarityCollect(
     };
   }
   return { ok: true, data: body as VerserSolidarityResponse };
+}
+
+async function postSolidarityAction(
+  path: string,
+  id: string | number,
+  fallback: string,
+): Promise<{ ok: true; data: SolidarityCollectPreview } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth(path, {
+    method: 'POST',
+    body: JSON.stringify({ id: Number(id) }),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, fallback) };
+  }
+  return { ok: true, data: body as SolidarityCollectPreview };
+}
+
+export function archiveSolidarityCollect(id: string | number) {
+  return postSolidarityAction(
+    '/api/solidarity/archive/',
+    id,
+    'Impossible d’archiver cette collecte.',
+  );
+}
+
+export function deleteSolidarityCollect(id: string | number) {
+  return postSolidarityAction(
+    '/api/solidarity/delete/',
+    id,
+    'Impossible de supprimer cette collecte.',
+  );
 }

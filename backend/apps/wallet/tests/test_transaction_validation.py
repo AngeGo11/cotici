@@ -10,11 +10,15 @@ from apps.wallet.models import Transaction, Wallet
 
 
 def _user(username: str) -> User:
+    # numero_telephone est désormais unique en base (correctif icontains -> exact
+    # match) : on dérive un numéro unique du username plutôt qu'une valeur fixe,
+    # sinon les tests créant plusieurs utilisateurs entrent en collision.
+    unique_suffix = str(abs(hash(username)) % 10**8).zfill(8)
     return User.objects.create_user(
         username=username,
         password="testpass123",
         code_pin="1234",
-        numero_telephone="+22501000000",
+        numero_telephone=f"225010{unique_suffix}",
     )
 
 

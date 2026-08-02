@@ -8,6 +8,8 @@ from .views import (
     list_my_solidarity,
     list_my_contributions,
     verser_beneficiaire,
+    archive_solidarity,
+    delete_solidarity,
 )
 
 urlpatterns = [
@@ -16,6 +18,8 @@ urlpatterns = [
     path("cotiser/", cotiser_tontine, name="solidarity-cotiser"),
     path("mine/", list_my_solidarity, name="solidarity-mine"),
     path("contributions/", list_my_contributions, name="solidarity-contributions"),
+    path("archive/", archive_solidarity, name="solidarity-archive"),
+    path("delete/", delete_solidarity, name="solidarity-delete"),
     path("<int:tontine_id>/preview/", solidarity_preview, name="solidarity-preview"),
     path("<int:tontine_id>/verser/", verser_beneficiaire, name="solidarity-verser"),
 ]

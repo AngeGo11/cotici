@@ -9,7 +9,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, ConfirmSheet } from '@/shared/ui';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { useAuth, formatFcfaDots, getDisplayFullName, getUserInitials } from '@/shared/auth';
+
 
 const settingsOptions = [
   { id: 'notifications', label: 'Notifications', description: 'Gérer vos alertes', icon: 'bell' as const, color: Colors.brand },
@@ -157,7 +158,9 @@ export default function ProfileScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const activityScrollRef = useRef<ScrollView>(null);
   const [activityPageIndex, setActivityPageIndex] = useState(0);
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const displayName = getDisplayFullName(user) || 'Membre COTICI';
   const phoneLine = user?.numero_telephone ?? '—';
   const dateJoined = user?.date_joined ?? '—';
@@ -189,6 +192,18 @@ export default function ProfileScreen() {
     activityScrollRef.current?.scrollTo({ x: prevPage * screenWidth, animated: true });
     setActivityPageIndex(prevPage);
   }, [activityPageIndex, screenWidth]);
+
+  const handleConfirmLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      setLogoutSheetOpen(false);
+      router.replace('/');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut, signOut, router]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -319,7 +334,7 @@ export default function ProfileScreen() {
             <AnimatedPressable
               key={option.id}
               style={styles.settingsItem} onPress={() => {
-                if (option.id === 'notifications') router.push('/notifications');
+                if (option.id === 'notifications') router.push('/notification-preferences');
                 else if (option.id === 'security') router.push('/security');
                 else if (option.id === 'help') router.push('/help-support');
                 else if (option.id === 'terms') router.push('/terms');
@@ -339,7 +354,7 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <AnimatedPressable style={styles.logoutButton} onPress={() => router.replace('/')} >
+        <AnimatedPressable style={styles.logoutButton} onPress={() => setLogoutSheetOpen(true)} >
           <Feather name="log-out" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </AnimatedPressable>
@@ -347,6 +362,17 @@ export default function ProfileScreen() {
         <Text style={styles.version}>COTICI v1.0.2</Text>
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={logoutSheetOpen}
+        title="Se déconnecter ?"
+        description="Vous devrez ressaisir vos identifiants pour accéder à nouveau à votre compte COTICI."
+        confirmLabel="Se déconnecter"
+        confirmVariant="danger"
+        loading={isLoggingOut}
+        onConfirm={() => void handleConfirmLogout()}
+        onCancel={() => setLogoutSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }

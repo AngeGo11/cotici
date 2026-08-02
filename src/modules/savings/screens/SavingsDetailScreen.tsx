@@ -4,25 +4,19 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button, ConfirmSheet, InfoBanner, ProgressGauge, Skeleton } from '@/shared/ui';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { Svg, Circle } from 'react-native-svg';
 import { archiveSavingsGoal, deleteSavingsGoal, withdrawFromSavings } from '@/shared/api';
 import { useAuth } from '@/shared/auth';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { useSavingsDetail } from '@/modules/savings/hooks/useSavingsDetail';
-
-const size = 200;
-const strokeWidth = 14;
-const radius = (size - strokeWidth) / 2;
-const circumference = 2 * Math.PI * radius;
 
 export default function SavingsDetailScreen() {
   const router = useRouter();
@@ -31,9 +25,11 @@ export default function SavingsDetailScreen() {
   const { detail, loading, error, reload } = useSavingsDetail(id);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [withdrawSheetOpen, setWithdrawSheetOpen] = useState(false);
+  const [archiveSheetOpen, setArchiveSheetOpen] = useState(false);
+  const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
 
   const percentage = detail?.percentage ?? 0;
-  const progressOffset = ((100 - percentage) / 100) * circumference;
   const goalReached = detail ? detail.saved >= detail.target : false;
   const canWithdraw = Boolean(detail?.isActive && goalReached && detail.saved > 0);
   /** Objectif déjà atteint puis épargne retirée vers le solde COTICI */
@@ -45,8 +41,20 @@ export default function SavingsDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+        <View style={styles.header}>
+          <View style={styles.backButton} />
+        </View>
+        <View style={styles.heroBlock}>
+          <Skeleton shape="circle" width={64} height={64} />
+          <View style={{ height: Theme.spacing.md }} />
+          <Skeleton shape="text" width="50%" height={22} />
+        </View>
+        <View style={styles.skeletonGaugeWrap}>
+          <Skeleton shape="circle" width={200} height={200} />
+        </View>
+        <View style={{ paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md }}>
+          <Skeleton shape="card" height={100} />
+          <Skeleton shape="card" height={80} />
         </View>
       </SafeAreaView>
     );
@@ -67,91 +75,62 @@ export default function SavingsDetailScreen() {
     );
   }
 
-  const handleWithdrawPress = () => {
-    const amountLabel = `${detail.saved.toLocaleString('fr-FR')} F`;
-    Alert.alert(
-      'Retirer votre épargne',
-      `Transférer ${amountLabel} vers votre solde COTICI disponible ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: () => {
-            void (async () => {
-              setIsWithdrawing(true);
-              const result = await withdrawFromSavings(detail.id);
-              if (!result.ok) {
-                Alert.alert('Erreur', result.detail);
-                setIsWithdrawing(false);
-                return;
-              }
-              await refreshUser();
-              await reload();
-              setIsWithdrawing(false);
-              router.push({
-                pathname: '/success',
-                params: { type: 'savings-withdraw', ref: result.data.ref_transaction },
-              });
-            })();
-          },
-        },
-      ],
-    );
+  const handleWithdrawPress = () => setWithdrawSheetOpen(true);
+  const handleArchivePress = () => setArchiveSheetOpen(true);
+  const handleDeletePress = () => setDeleteSheetOpen(true);
+
+  const confirmWithdraw = () => {
+    void (async () => {
+      setIsWithdrawing(true);
+      const result = await withdrawFromSavings(detail.id);
+      setWithdrawSheetOpen(false);
+      if (!result.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        Alert.alert('Erreur', result.detail);
+        setIsWithdrawing(false);
+        return;
+      }
+      await refreshUser();
+      await reload();
+      setIsWithdrawing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      router.push({
+        pathname: '/success',
+        params: { type: 'savings-withdraw', ref: result.data.ref_transaction },
+      });
+    })();
   };
 
-  const handleArchivePress = () => {
-    Alert.alert(
-      'Archiver cet objectif',
-      'Il sera retiré de votre liste active. Vous pourrez toujours consulter son historique.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Archiver',
-          onPress: () => {
-            void (async () => {
-              setIsArchiving(true);
-              const result = await archiveSavingsGoal(detail.id);
-              if (!result.ok) {
-                Alert.alert('Erreur', result.detail);
-                setIsArchiving(false);
-                return;
-              }
-              await refreshUser();
-              setIsArchiving(false);
-              router.replace('/(tabs)/savings');
-            })();
-          },
-        },
-      ],
-    );
+  const confirmArchive = () => {
+    void (async () => {
+      setIsArchiving(true);
+      const result = await archiveSavingsGoal(detail.id);
+      setArchiveSheetOpen(false);
+      if (!result.ok) {
+        Alert.alert('Erreur', result.detail);
+        setIsArchiving(false);
+        return;
+      }
+      await refreshUser();
+      setIsArchiving(false);
+      router.replace('/(tabs)/savings');
+    })();
   };
 
-  const handleDeletePress = () => {
-    Alert.alert(
-      'Supprimer cet objectif',
-      'Cette action est définitive. L’objectif ne sera plus visible.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setIsArchiving(true);
-              const result = await deleteSavingsGoal(detail.id);
-              if (!result.ok) {
-                Alert.alert('Erreur', result.detail);
-                setIsArchiving(false);
-                return;
-              }
-              await refreshUser();
-              setIsArchiving(false);
-              router.replace('/(tabs)/savings');
-            })();
-          },
-        },
-      ],
-    );
+  const confirmDelete = () => {
+    void (async () => {
+      setIsArchiving(true);
+      const result = await deleteSavingsGoal(detail.id);
+      setDeleteSheetOpen(false);
+      if (!result.ok) {
+        Alert.alert('Erreur', result.detail);
+        setIsArchiving(false);
+        return;
+      }
+      await refreshUser();
+      setIsArchiving(false);
+      router.replace('/(tabs)/savings');
+    })();
   };
 
   return (
@@ -179,57 +158,35 @@ export default function SavingsDetailScreen() {
         </View>
 
         <View style={styles.progressShell}>
-          <View style={styles.circleWrap}>
-            <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-              <Circle cx={size / 2} cy={size / 2} r={radius} stroke={Colors.gray[100]} strokeWidth={strokeWidth} fill="none" />
-              <Circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                stroke={Colors.success}
-                strokeWidth={strokeWidth}
-                fill="none"
-                strokeDasharray={`${circumference}`}
-                strokeDashoffset={`${progressOffset}`}
-                strokeLinecap="round"
-              />
-            </Svg>
-            <View style={styles.circleCenter}>
-              <Text style={styles.percentageText}>{percentage}%</Text>
-              <Text style={styles.completedText}>atteint</Text>
-            </View>
-          </View>
+          <ProgressGauge
+            progress={percentage / 100}
+            size={200}
+            strokeWidth={14}
+            color={Colors.success}
+            label={`${percentage}%`}
+            sublabel="atteint"
+            accessibilityLabel={`Objectif atteint à ${percentage}%`}
+          />
         </View>
 
         {detail.isArchived ? (
-          <View style={styles.archivedBanner}>
-            <Feather name="archive" size={20} color={Colors.gray[600]} />
-            <Text style={styles.archivedBannerText}>Objectif archivé — consultation seule</Text>
-          </View>
+          <InfoBanner icon="archive" tone="neutral" text="Objectif archivé — consultation seule" />
         ) : null}
 
         {canWithdraw ? (
-          <View style={styles.successBanner}>
-            <Feather name="award" size={22} color={Colors.success} />
-            <View style={styles.successBannerTexts}>
-              <Text style={styles.successBannerTitle}>Objectif atteint !</Text>
-              <Text style={styles.successBannerSub}>
-                Vous pouvez retirer votre épargne vers votre solde disponible.
-              </Text>
-            </View>
-          </View>
+          <InfoBanner
+            icon="award"
+            tone="success"
+            text="Objectif atteint ! Vous pouvez retirer votre épargne vers votre solde disponible."
+          />
         ) : null}
 
         {showArchiveDeleteOnly ? (
-          <View style={styles.successBanner}>
-            <Feather name="check-circle" size={22} color={Colors.success} />
-            <View style={styles.successBannerTexts}>
-              <Text style={styles.successBannerTitle}>Objectif terminé</Text>
-              <Text style={styles.successBannerSub}>
-                Votre épargne a été retirée. Archivez ou supprimez cet objectif.
-              </Text>
-            </View>
-          </View>
+          <InfoBanner
+            icon="check-circle"
+            tone="success"
+            text="Objectif terminé. Votre épargne a été retirée. Archivez ou supprimez cet objectif."
+          />
         ) : null}
 
         <View style={styles.amountCard}>
@@ -312,76 +269,93 @@ export default function SavingsDetailScreen() {
 
         <View style={styles.actions}>
           {detail.isArchived ? (
-            <AnimatedPressable
-              style={styles.editButton}
+            <Button
+              label="Voir l'historique"
+              variant="ghost"
+              leftIcon="clock"
               onPress={() => router.push({ pathname: '/savings-history', params: { id: detail.id } })}
-            >
-              <Feather name="clock" size={18} color={Colors.gray[700]} />
-              <Text style={styles.editButtonText}>Voir l&apos;historique</Text>
-            </AnimatedPressable>
+            />
           ) : canWithdraw ? (
             <>
-              <AnimatedPressable
-                style={[styles.withdrawButton, isWithdrawing && styles.buttonDisabled]}
+              <Button
+                label="Retirer votre épargne"
+                variant="primary"
+                leftIcon="arrow-down-left"
+                loading={isWithdrawing}
                 onPress={handleWithdrawPress}
-                disabled={isWithdrawing}
-              >
-                {isWithdrawing ? (
-                  <ActivityIndicator color={Colors.white} />
-                ) : (
-                  <>
-                    <Feather name="arrow-down-left" size={20} color={Colors.white} />
-                    <Text style={styles.withdrawButtonText}>Retirer votre épargne</Text>
-                  </>
-                )}
-              </AnimatedPressable>
+              />
               <Text style={styles.withdrawHint}>
                 Les fonds seront crédités sur votre solde COTICI (compte principal).
               </Text>
             </>
           ) : showArchiveDeleteOnly ? (
             <>
-              <AnimatedPressable
-                style={[styles.archiveButton, isArchiving && styles.buttonDisabled]}
+              <Button
+                label="Archiver l'objectif"
+                variant="ghost"
+                leftIcon="archive"
+                loading={isArchiving}
                 onPress={handleArchivePress}
-                disabled={isArchiving}
-              >
-                <Feather name="archive" size={18} color={Colors.gray[700]} />
-                <Text style={styles.archiveButtonText}>Archiver l&apos;objectif</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={[styles.deleteButton, isArchiving && styles.buttonDisabled]}
+              />
+              <Button
+                label="Supprimer l'objectif"
+                variant="danger"
+                leftIcon="trash-2"
+                loading={isArchiving}
                 onPress={handleDeletePress}
-                disabled={isArchiving}
-              >
-                <Feather name="trash-2" size={18} color={Colors.danger} />
-                <Text style={styles.deleteButtonText}>Supprimer l&apos;objectif</Text>
-              </AnimatedPressable>
+              />
             </>
           ) : showAddAndEdit ? (
             <>
-              <AnimatedPressable
-                style={styles.addButton}
+              <Button
+                label="Ajouter de l'argent"
+                variant="primary"
+                leftIcon="plus-circle"
                 onPress={() => router.push({ pathname: '/add-to-savings', params: { id: detail.id } })}
-              >
-                <Feather name="plus-circle" size={20} color={Colors.white} />
-                <Text style={styles.addButtonText}>Ajouter de l&apos;argent</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={styles.editButton}
+              />
+              <Button
+                label="Modifier l'objectif"
+                variant="ghost"
+                leftIcon="edit-2"
                 onPress={() =>
                   router.push({ pathname: '/modifier-objectif', params: { id: detail.id } })
                 }
-              >
-                <Feather name="edit-2" size={18} color={Colors.gray[700]} />
-                <Text style={styles.editButtonText}>Modifier l&apos;objectif</Text>
-              </AnimatedPressable>
+              />
             </>
           ) : null}
         </View>
-
-        
       </ScrollView>
+
+      <ConfirmSheet
+        visible={withdrawSheetOpen}
+        title="Retirer votre épargne"
+        description={`Transférer ${detail.saved.toLocaleString('fr-FR')} F vers votre solde COTICI disponible ?`}
+        confirmLabel="Confirmer"
+        loading={isWithdrawing}
+        onConfirm={confirmWithdraw}
+        onCancel={() => setWithdrawSheetOpen(false)}
+      />
+
+      <ConfirmSheet
+        visible={archiveSheetOpen}
+        title="Archiver cet objectif"
+        description="Il sera retiré de votre liste active. Vous pourrez toujours consulter son historique."
+        confirmLabel="Archiver"
+        loading={isArchiving}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveSheetOpen(false)}
+      />
+
+      <ConfirmSheet
+        visible={deleteSheetOpen}
+        title="Supprimer cet objectif"
+        description="Cette action est définitive. L'objectif ne sera plus visible."
+        confirmLabel="Supprimer"
+        confirmVariant="danger"
+        loading={isArchiving}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteSheetOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -453,10 +427,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray[100],
     ...Theme.shadow.card,
   },
-  circleWrap: { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
-  circleCenter: { position: 'absolute', alignItems: 'center' },
-  percentageText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 44, color: Colors.success },
-  completedText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500], marginTop: 2 },
+  skeletonGaugeWrap: {
+    alignItems: 'center',
+    marginHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.xl,
+  },
   amountCard: {
     marginHorizontal: Theme.spacing.page,
     backgroundColor: withOpacity(Colors.success, 0.08),
@@ -510,57 +485,6 @@ const styles = StyleSheet.create({
   statValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
   statSub: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500], marginTop: 4 },
   actions: { paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md, marginBottom: Theme.spacing.xl },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.lg,
-    padding: Theme.spacing.lg,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: withOpacity(Colors.success, 0.1),
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.success, 0.25),
-  },
-  successBannerTexts: { flex: 1 },
-  successBannerTitle: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 15,
-    color: Colors.gray[900],
-    marginBottom: 4,
-  },
-  successBannerSub: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: Colors.gray[600],
-    lineHeight: 18,
-  },
-  archivedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.lg,
-    padding: Theme.spacing.md,
-    borderRadius: Theme.radius.md,
-    backgroundColor: Colors.gray[100],
-  },
-  archivedBannerText: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 14,
-    color: Colors.gray[700],
-  },
-  withdrawButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: Colors.success,
-    paddingVertical: 16,
-    borderRadius: Theme.radius.md,
-    ...Theme.shadow.soft,
-  },
-  withdrawButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
   withdrawHint: {
     fontFamily: Fonts.outfit.regular,
     fontSize: 12,
@@ -568,55 +492,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: -4,
   },
-  buttonDisabled: { opacity: 0.7 },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: Colors.brand,
-    paddingVertical: 16,
-    borderRadius: Theme.radius.md,
-    ...Theme.shadow.soft,
-  },
-  addButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: Theme.radius.md,
-    backgroundColor: Theme.screen.surface,
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-    ...Theme.shadow.soft,
-  },
-  editButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[700] },
-  archiveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: Theme.radius.md,
-    backgroundColor: Theme.screen.surface,
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-  },
-  archiveButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[700] },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: Theme.radius.md,
-    backgroundColor: withOpacity(Colors.danger, 0.06),
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.danger, 0.2),
-  },
-  deleteButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.danger },
   contributionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

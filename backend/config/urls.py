@@ -27,4 +27,5 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/audits/', include('apps.audits.urls')),
     path('api/wallet/', include('apps.wallet.urls')),
+    path('api/admin/', include('apps.administration.urls')),
 ]

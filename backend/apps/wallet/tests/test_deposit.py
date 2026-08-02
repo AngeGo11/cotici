@@ -1,9 +1,11 @@
 from decimal import Decimal
 
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.audits.models import AuditLog
 from apps.authn.models import User
 from apps.wallet.models import Transaction, Wallet
 from apps.wallet.views import _parse_amount, _resolve_payment_mode, _unique_ref
@@ -12,11 +14,15 @@ DEPOSIT_URL = reverse("wallet-deposit")
 
 
 def _create_user(username: str = "deposit_user") -> User:
+    # numero_telephone est désormais unique en base (correctif icontains -> exact
+    # match) : on dérive un numéro unique du username plutôt qu'une valeur fixe,
+    # sinon les tests créant plusieurs utilisateurs entrent en collision.
+    unique_suffix = str(abs(hash(username)) % 10**8).zfill(8)
     return User.objects.create_user(
         username=username,
         password="testpass123",
         code_pin="1234",
-        numero_telephone="22507080910",
+        numero_telephone=f"225070{unique_suffix}",
     )
 
 
@@ -111,6 +117,23 @@ class DepositViewTests(APITestCase):
             "Le montant à déposer doit être supérieur à zéro.",
         )
 
+    def test_deposit_non_integer_amount_rejected_cleanly(self):
+        """XOF n'a pas de sous-unité : `Transaction.montant_transaction` est un
+        DecimalField(decimal_places=0). Avant correctif, un montant décimal
+        passait `_parse_amount` puis faisait planter `Transaction.objects.create()`
+        (ValidationError non rattrapée -> 500), après que le wallet ait été créé
+        (get_or_create) mais dans la même transaction atomique donc sans effet
+        persistant. On veut un rejet propre en 400, sans wallet ni transaction créés."""
+        response = self.client.post(
+            DEPOSIT_URL,
+            {"montant_depose": "100.55", "mode_de_paiement": "ORANGE"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("entier", response.data["detail"])
+        self.assertFalse(Wallet.objects.filter(user=self.user).exists())
+        self.assertFalse(Transaction.objects.exists())
+
     def test_deposit_unknown_payment_mode(self):
         response = self.client.post(
             DEPOSIT_URL,
@@ -133,21 +156,40 @@ class DepositViewTests(APITestCase):
         self.assertEqual(response.data["ancien_solde"], "0")
         self.assertEqual(response.data["montant_depot"], "10000")
         self.assertEqual(response.data["nouveau_solde"], "10000")
-        self.assertEqual(response.data["numero_telephone_utilise"], "22507080910")
+        self.assertEqual(response.data["numero_telephone_utilise"], self.user.numero_telephone)
         self.assertTrue(response.data["ref_transaction"].startswith("D"))
+        # Aucune intégration Mobile Money réelle n'existe : le endpoint doit le
+        # signaler explicitement au frontend.
+        self.assertTrue(response.data["sandbox"])
 
         wallet = Wallet.objects.get(user=self.user)
         self.assertEqual(wallet.solde_courant, Decimal("10000"))
 
         tx = Transaction.objects.get(ref_transaction=response.data["ref_transaction"])
         self.assertEqual(tx.wallet, wallet)
-        self.assertEqual(tx.montant_transaction, Decimal("10000"))
-        self.assertEqual(tx.mode_de_paiement, Transaction.MODE_DE_PAIEMENT.ORANGE)
-        self.assertEqual(tx.type_transaction, Transaction.TYPE_TRANSACTION.DEPOT)
-        self.assertEqual(tx.statut_transaction, Transaction.STATUT_TRANSACTION.REUSSIE)
-        self.assertIsNone(tx.tontine_id)
-        self.assertIsNone(tx.tour_id)
-        self.assertIsNone(tx.epargne_id)
+
+        audit = AuditLog.objects.filter(
+            user=self.user, action=AuditLog.Action.DEPOSIT_CONFIRMED
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertIn(response.data["ref_transaction"], audit.resource)
+
+    @override_settings(MOBILE_MONEY_SANDBOX=False)
+    def test_deposit_refused_when_sandbox_disabled(self):
+        """Sans intégration Mobile Money réelle, désactiver le sandbox doit
+        bloquer tout dépôt plutôt que de créditer un solde fictif."""
+        response = self.client.post(
+            DEPOSIT_URL,
+            {"montant_depose": 10000, "mode_de_paiement": "ORANGE"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertFalse(Wallet.objects.filter(user=self.user).exists())
+        self.assertFalse(
+            AuditLog.objects.filter(
+                user=self.user, action=AuditLog.Action.DEPOSIT_CONFIRMED
+            ).exists()
+        )
 
     def test_deposit_accumulates_balance(self):
         Wallet.objects.create(user=self.user, solde_courant=Decimal("3000"))

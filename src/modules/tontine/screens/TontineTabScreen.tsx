@@ -21,6 +21,11 @@ import {
   fetchMySolidarityContributions,
   type SolidarityCollectPreview,
 } from '@/shared/api/solidarityApi';
+import {
+  fetchMyCagnotte,
+  fetchMyContributionsToCagnotte,
+  type CagnottePreview,
+} from '@/shared/api/cagnotteApi';
 import { useTontines, type TontineListItem } from '@/modules/tontine/hooks/useTontines';
 
 const statusLabel = {
@@ -109,6 +114,81 @@ function SolidarityCollectCard({
   );
 }
 
+function cagnotteStatus(cagnotte: CagnottePreview) {
+  if (cagnotte.recuperation_effectue) {
+    return { text: 'Récupération effectuée', color: Colors.success, bg: withOpacity(Colors.success, 0.12) };
+  }
+  if (cagnotte.objectif_atteint) {
+    return { text: 'Objectif atteint', color: Colors.success, bg: withOpacity(Colors.success, 0.12) };
+  }
+  if (cagnotte.est_active) {
+    return { text: 'En cours', color: Colors.info, bg: withOpacity(Colors.info, 0.12) };
+  }
+  return { text: 'Clôturée', color: Colors.gray[500], bg: withOpacity(Colors.gray[500], 0.12) };
+}
+
+function CagnotteCard({
+  cagnotte,
+  contributionAmount,
+  onPress,
+}: {
+  cagnotte: CagnottePreview;
+  contributionAmount?: number;
+  onPress: () => void;
+}) {
+  const badge = cagnotteStatus(cagnotte);
+
+  return (
+    <AnimatedPressable style={styles.tontineCard} onPress={onPress}>
+      <View style={styles.cardTop}>
+        <View style={[styles.cardIcon, styles.cagnotteIcon]}>
+          <Feather name="home" size={22} color={Colors.success} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.tontineName} numberOfLines={2}>{cagnotte.nom_cagnotte}</Text>
+          <View style={styles.metaRow}>
+            <Feather name="user" size={13} color={Colors.gray[500]} />
+            <Text style={styles.tontineMembers}>
+              {cagnotte.est_organisateur
+                ? `Organisée par vous · ${cagnotte.nb_contributeurs} contributeur${cagnotte.nb_contributeurs > 1 ? 's' : ''}`
+                : `Par ${cagnotte.organisateur_nom}`}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.statusText, { color: badge.color }]}>{badge.text}</Text>
+        </View>
+      </View>
+
+      <View style={styles.turnBlock}>
+        <View style={styles.turnHeader}>
+          <Text style={styles.turnLabel}>Collecte</Text>
+          <Text style={styles.turnFraction}>{cagnotte.progression_pct}%</Text>
+        </View>
+        <View style={styles.turnTrack}>
+          <View style={[styles.turnFill, styles.cagnotteFill, { width: `${cagnotte.progression_pct}%` }]} />
+        </View>
+      </View>
+
+      <View style={styles.cardBottom}>
+        <View>
+          <Text style={styles.detailLabel}>
+            {contributionAmount != null ? 'Votre participation' : 'Collecté / objectif'}
+          </Text>
+          <Text style={styles.detailValue}>
+            {contributionAmount != null
+              ? formatFcfa(contributionAmount)
+              : `${formatFcfa(cagnotte.montant_collecte)} / ${formatFcfa(cagnotte.objectif_collecte)}`}
+          </Text>
+        </View>
+        <View style={styles.chevronWrap}>
+          <Feather name="chevron-right" size={22} color={Colors.gray[400]} />
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 export default function TontineListScreen() {
   const router = useRouter();
   const { tontines, loading, error, reload } = useTontines();
@@ -116,6 +196,8 @@ export default function TontineListScreen() {
   const [invitationsCount, setInvitationsCount] = useState(0);
   const [organizedCollects, setOrganizedCollects] = useState<SolidarityCollectPreview[]>([]);
   const [contributedCollects, setContributedCollects] = useState<SolidarityCollectPreview[]>([]);
+  const [organizedCagnotte, setOrganizedCagnotte] = useState<CagnottePreview[]>([]);
+  const [contributedCagnotte, setContributedCagnotte] = useState<CagnottePreview[]>([]);
 
   const loadRecruiting = useCallback(async () => {
     const result = await fetchRecruitingTontines();
@@ -140,10 +222,29 @@ export default function TontineListScreen() {
     if (contributed.ok) setContributedCollects(contributed.data);
   }, []);
 
+  const loadCagnotte = useCallback(async () => {
+    const [organized, contributed] = await Promise.all([
+      fetchMyCagnotte(),
+      fetchMyContributionsToCagnotte(),
+    ]);
+    if (organized.ok) setOrganizedCagnotte(organized.data);
+    if (contributed.ok) setContributedCagnotte(contributed.data);
+  }, []);
+
   const openSolidarityCollect = useCallback(
     (id: number) => {
       router.push({
         pathname: '/solidarity-collect/[id]',
+        params: { id: String(id) },
+      });
+    },
+    [router],
+  );
+
+  const openCagnotteCollect = useCallback(
+    (id: number) => {
+      router.push({
+        pathname: '/cagnotte-collect/[id]',
         params: { id: String(id) },
       });
     },
@@ -155,8 +256,9 @@ export default function TontineListScreen() {
       void loadRecruiting();
       void loadInvitations();
       void loadSolidarity();
+      void loadCagnotte();
       void reload();
-    }, [loadRecruiting, loadInvitations, loadSolidarity, reload]),
+    }, [loadRecruiting, loadInvitations, loadSolidarity, loadCagnotte, reload]),
   );
 
   const activeTontines = tontines.filter((t) => t.phase !== 'completed');
@@ -397,6 +499,33 @@ export default function TontineListScreen() {
           </>
         ) : null}
 
+        {organizedCagnotte.length > 0 ? (
+          <>
+            <Text style={styles.sectionEyebrow}>Mes cagnottes</Text>
+            {organizedCagnotte.map((cagnotte) => (
+              <CagnotteCard
+                key={`fund-org-${cagnotte.id}`}
+                cagnotte={cagnotte}
+                onPress={() => openCagnotteCollect(cagnotte.id)}
+              />
+            ))}
+          </>
+        ) : null}
+
+        {contributedCagnotte.length > 0 ? (
+          <>
+            <Text style={styles.sectionEyebrow}>Mes contributions</Text>
+            {contributedCagnotte.map((cagnotte) => (
+              <CagnotteCard
+                key={`fund-contrib-${cagnotte.id}`}
+                cagnotte={cagnotte}
+                contributionAmount={cagnotte.montant_contribue}
+                onPress={() => openCagnotteCollect(cagnotte.id)}
+              />
+            ))}
+          </>
+        ) : null}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -581,6 +710,12 @@ const styles = StyleSheet.create({
   },
   solidarityIcon: {
     backgroundColor: withOpacity(Colors.brand, 0.14),
+  },
+  cagnotteIcon: {
+    backgroundColor: withOpacity(Colors.success, 0.14),
+  },
+  cagnotteFill: {
+    backgroundColor: Colors.success,
   },
   tontineName: {
     fontFamily: Fonts.spaceGrotesk.bold,

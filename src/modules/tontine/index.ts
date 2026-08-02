@@ -7,7 +7,6 @@ export { default as TontineDetailsScreen } from './screens/TontineDetailsScreen'
 export { default as TontineTabScreen } from './screens/TontineTabScreen';
 export { default as ChooseTontineCotisationScreen } from './screens/ChooseTontineCotisationScreen';
 export { default as DefineOrdreRamassageScreen } from './screens/DefineOrdreRamassageScreen';
-export * from './data/tontines';
-export * from './data/tontinePhase';
-export { useTontinePhase } from './hooks/useTontinePhase';
+export * from './utils/ordreRamassage';
+export { useTontinePhase, type TontinePhaseState } from './hooks/useTontinePhase';
 export * from './types';

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button, SelectableRow } from '@/shared/ui';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -16,8 +17,48 @@ import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { PaymentProviderMark } from '@/components/PaymentProviderMark';
 import type { PaymentProvider } from '@/types';
-import { parseBalance, submitWalletDeposit } from '@/shared/api';
+import {
+  fetchTransactionStatus,
+  parseBalance,
+  submitWalletDeposit,
+  type WalletTransactionStatus,
+} from '@/shared/api';
 import { formatMonthlyFlow, useAuth } from '@/shared/auth';
+
+/**
+ * Poll interval/attempts pour la confirmation CinetPay : le webhook backend est
+ * asynchrone (quelques secondes à quelques minutes). On sonde `~30s` avant de
+ * renvoyer l'utilisateur vers un écran "en attente" plutôt que de bloquer indéfiniment.
+ */
+const POLL_INTERVAL_MS = 2500;
+const POLL_MAX_ATTEMPTS = 12;
+
+/**
+ * Sonde le statut d'une transaction jusqu'à obtenir un état terminal
+ * (`RÉUSSIE`/`ÉCHOUÉE`/`ANNULÉE`) ou épuiser les tentatives. Vérifie `isMountedRef`
+ * avant chaque `await` pour éviter tout `setState` après démontage de l'écran.
+ */
+async function pollDepositStatus(
+  ref: string,
+  isMountedRef: { current: boolean },
+): Promise<WalletTransactionStatus | null> {
+  for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
+    if (!isMountedRef.current) return null;
+    const result = await fetchTransactionStatus(ref);
+    if (!isMountedRef.current) return null;
+    if (result.ok && result.data?.statut_transaction) {
+      const status = result.data.statut_transaction as WalletTransactionStatus;
+      if (status === 'RÉUSSIE' || status === 'ÉCHOUÉE' || status === 'ANNULÉE') {
+        return status;
+      }
+    }
+    if (attempt < POLL_MAX_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      if (!isMountedRef.current) return null;
+    }
+  }
+  return 'EN ATTENTE';
+}
 
 const providers = [
   { id: 'orange' as const, name: 'Orange Money' },
@@ -43,6 +84,15 @@ export default function DepositToAccountScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const currentBalance = parseBalance(user?.solde_courant);
   const amountNum = depositAmount ? Number(depositAmount.replace(/\s/g, '')) : 0;
@@ -74,13 +124,80 @@ export default function DepositToAccountScreen() {
       return;
     }
 
+    const { data } = result;
+
+    if (data.payment_url) {
+      // Mode CinetPay réel : le wallet n'est pas encore crédité. L'utilisateur
+      // paie sur la page CinetPay, puis on sonde le statut jusqu'à confirmation
+      // (le webhook backend est asynchrone).
+      // Note : on ne connaît pas de deep-link de retour garanti côté CinetPay,
+      // on ouvre donc un navigateur classique plutôt que openAuthSessionAsync
+      // (qui suppose un redirect vers le scheme de l'app) — à valider sur device
+      // réel avec un compte CinetPay de test.
+      try {
+        await WebBrowser.openBrowserAsync(data.payment_url);
+      } catch {
+        // navigateur fermé/indisponible : on tente quand même la confirmation.
+      }
+      if (!isMountedRef.current) return;
+
+      setIsSubmitting(false);
+      setConfirmingPayment(true);
+      const finalStatus = await pollDepositStatus(data.ref_transaction, isMountedRef);
+      if (!isMountedRef.current) return;
+      setConfirmingPayment(false);
+
+      if (finalStatus === 'RÉUSSIE') {
+        await refreshUser();
+        if (!isMountedRef.current) return;
+        router.push({
+          pathname: '/success',
+          params: { type: 'deposit', ref: data.ref_transaction },
+        });
+        return;
+      }
+
+      if (finalStatus === 'ÉCHOUÉE' || finalStatus === 'ANNULÉE') {
+        setErrorMessage(
+          "Le paiement n'a pas abouti. Aucun montant n'a été crédité sur votre compte. Vous pouvez réessayer.",
+        );
+        return;
+      }
+
+      // Toujours "EN ATTENTE" (ou statut introuvable) après le délai imparti :
+      // le webhook n'a pas encore confirmé, on informe sans bloquer l'utilisateur.
+      router.push({
+        pathname: '/success',
+        params: { type: 'deposit-pending', ref: data.ref_transaction },
+      });
+      return;
+    }
+
+    // Mode sandbox (ou tout mode où le crédit est immédiat) : comportement
+    // historique inchangé, `nouveau_solde` est déjà à jour côté serveur.
     await refreshUser();
+    if (!isMountedRef.current) return;
     setIsSubmitting(false);
     router.push({
       pathname: '/success',
-      params: { type: 'deposit', ref: result.data.ref_transaction },
+      params: { type: 'deposit', ref: data.ref_transaction },
     });
   };
+
+  if (confirmingPayment) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.confirmingWrap}>
+          <ActivityIndicator color={Colors.brand} size="large" />
+          <Text style={styles.confirmingTitle}>Confirmation du paiement en cours…</Text>
+          <Text style={styles.confirmingSubtitle}>
+            Nous attendons la confirmation de votre opérateur Mobile Money. Cela peut
+            prendre jusqu'à une minute, merci de patienter.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -164,33 +281,16 @@ export default function DepositToAccountScreen() {
           <Text style={styles.sectionHint}>Sélectionnez le compte depuis lequel vous payez</Text>
         </View>
         <View style={styles.providerList}>
-          {providers.map((p) => {
-            const selected = selectedProvider === p.id;
-            return (
-              <AnimatedPressable
-                key={p.id}
-                style={[styles.providerRow, selected && styles.providerRowSelected]}
-                onPress={() => setSelectedProvider(p.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={`${p.name}, Mobile Money`}
-              >
-                <View style={styles.providerRowLogo}>
-                  <PaymentProviderMark providerId={p.id} maxWidth={64} maxHeight={28} />
-                </View>
-                <View style={styles.providerRowDivider} />
-                <View style={styles.providerRowText}>
-                  <Text style={styles.providerRowTitle} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={styles.providerRowSubtitle}>Mobile Money</Text>
-                </View>
-                <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
-                  {selected ? <View style={styles.radioInner} /> : null}
-                </View>
-              </AnimatedPressable>
-            );
-          })}
+          {providers.map((p) => (
+            <SelectableRow
+              key={p.id}
+              leading={<PaymentProviderMark providerId={p.id} maxWidth={64} maxHeight={28} />}
+              title={p.name}
+              subtitle="Mobile Money"
+              selected={selectedProvider === p.id}
+              onPress={() => setSelectedProvider(p.id)}
+            />
+          ))}
         </View>
 
         <View style={styles.sectionHead}>
@@ -237,19 +337,15 @@ export default function DepositToAccountScreen() {
           </Text>
         </View>
 
-        <AnimatedPressable
-          style={[styles.confirmButton, !canSubmit && styles.confirmDisabled]}
+        <Button
+          label="Confirmer le dépôt"
+          size="lg"
+          leftIcon="arrow-down-left"
           disabled={!canSubmit}
+          loading={isSubmitting}
           onPress={() => void handleConfirmDeposit()}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Text style={[styles.confirmText, !canSubmit && styles.confirmTextDisabled]}>
-              Confirmer le dépôt
-            </Text>
-          )}
-        </AnimatedPressable>
+          style={styles.confirmButtonWrap}
+        />
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -426,77 +522,11 @@ const styles = StyleSheet.create({
     color: Colors.gray[700],
   },
   quickChipTextSelected: { color: Colors.brand },
-  /** Liste type « carte de paiement » : logo | séparateur | libellés | radio */
+  /** Sélection d'opérateur Mobile Money : voir SelectableRow (@/shared/ui). */
   providerList: {
     paddingHorizontal: Theme.spacing.page,
     gap: Theme.spacing.md,
     marginBottom: Theme.spacing.xl,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-    paddingVertical: 14,
-    paddingLeft: Theme.spacing.lg,
-    paddingRight: Theme.spacing.md,
-    minHeight: 72,
-    ...Theme.shadow.soft,
-  },
-  providerRowSelected: {
-    borderColor: Colors.gray[900],
-    borderWidth: 1.5,
-  },
-  providerRowLogo: {
-    width: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  providerRowDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.gray[200],
-    marginHorizontal: Theme.spacing.md,
-  },
-  providerRowText: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  providerRowTitle: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Colors.gray[900],
-    letterSpacing: -0.2,
-  },
-  providerRowSubtitle: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.gray[500],
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.gray[300],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Theme.spacing.sm,
-  },
-  radioOuterOn: {
-    borderColor: Colors.gray[900],
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.gray[900],
   },
   inputBare: {
     fontFamily: Fonts.outfit.medium,
@@ -591,15 +621,28 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: Colors.gray[700],
   },
-  confirmButton: {
+  confirmButtonWrap: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Colors.brand,
-    paddingVertical: 18,
-    borderRadius: Theme.radius.md,
-    alignItems: 'center',
-    ...Theme.shadow.soft,
   },
-  confirmDisabled: { backgroundColor: Colors.gray[200], shadowOpacity: 0, elevation: 0 },
-  confirmText: { fontFamily: Fonts.outfit.semiBold, fontSize: 17, letterSpacing: 0.2, color: Colors.white },
-  confirmTextDisabled: { color: Colors.gray[400] },
+  confirmingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Theme.spacing.xl,
+    gap: Theme.spacing.md,
+  },
+  confirmingTitle: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 20,
+    color: Colors.gray[900],
+    textAlign: 'center',
+    marginTop: Theme.spacing.md,
+  },
+  confirmingSubtitle: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.gray[600],
+    textAlign: 'center',
+  },
 });

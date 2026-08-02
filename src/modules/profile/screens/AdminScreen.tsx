@@ -1,8 +1,9 @@
-import { 
+import {
   View,
   Text,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
  } from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
@@ -13,7 +14,7 @@ import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import type { JoinRequest, PaymentValidation } from '@/types';
 import { useLocalSearchParams } from 'expo-router';
-import { needsDefineOrdre, ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
+import { needsDefineOrdre, ORDRE_LOCK_MESSAGE } from '@/modules/tontine/utils/ordreRamassage';
 import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
 
 const joinRequests: JoinRequest[] = [
@@ -39,9 +40,16 @@ export default function AdminScreen() {
     typeof params.tontineNom === 'string' && params.tontineNom.trim()
       ? params.tontineNom.trim()
       : 'Tontine Entrepreneurs';
-  const phaseState = useTontinePhase(tontineId);
-  const showDefineOrdreCta = phaseState ? needsDefineOrdre(phaseState) : false;
-  const ordreVerrouille = phaseState?.ordrePublie ?? false;
+  const { phaseState, loading: phaseLoading } = useTontinePhase(tontineId);
+  const showDefineOrdreCta = phaseState
+    ? needsDefineOrdre({
+        phase: phaseState.phase,
+        ordreMode: phaseState.ordreMode,
+        ordrePublie: phaseState.ordrePublie,
+        isAdmin: phaseState.isAdmin,
+      })
+    : false;
+  const ordreVerrouille = phaseState?.ordreMode === 'admin' && (phaseState?.ordrePublie ?? false);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -92,22 +100,31 @@ export default function AdminScreen() {
           </View>
         ))}
 
-        {showDefineOrdreCta ? (
-          <View style={styles.ordreHintCard}>
-            <Feather name="info" size={18} color={Colors.brand} />
-            <Text style={styles.ordreHintText}>
-              L&apos;ordre de ramassage se définit depuis la page de la tontine, une fois le groupe
-              complet. Il ne sera pas modifiable dans les paramètres après publication.
-            </Text>
-          </View>
-        ) : null}
-
-        {ordreVerrouille ? (
+        {phaseLoading && !phaseState ? (
           <View style={styles.ordreLockCard}>
-            <Feather name="lock" size={18} color={Colors.gray[600]} />
-            <Text style={styles.ordreLockText}>{ORDRE_LOCK_MESSAGE}</Text>
+            <ActivityIndicator size="small" color={Colors.brand} />
+            <Text style={styles.ordreLockText}>Chargement de l&apos;état de l&apos;ordre de ramassage…</Text>
           </View>
-        ) : null}
+        ) : (
+          <>
+            {showDefineOrdreCta ? (
+              <View style={styles.ordreHintCard}>
+                <Feather name="info" size={18} color={Colors.brand} />
+                <Text style={styles.ordreHintText}>
+                  L&apos;ordre de ramassage se définit depuis la page de la tontine, une fois le groupe
+                  complet. Il ne sera pas modifiable dans les paramètres après publication.
+                </Text>
+              </View>
+            ) : null}
+
+            {ordreVerrouille ? (
+              <View style={styles.ordreLockCard}>
+                <Feather name="lock" size={18} color={Colors.gray[600]} />
+                <Text style={styles.ordreLockText}>{ORDRE_LOCK_MESSAGE}</Text>
+              </View>
+            ) : null}
+          </>
+        )}
 
         <Text style={[styles.sectionTitle, { paddingHorizontal: Theme.spacing.page, marginTop: 24, marginBottom: 16 }]}>Paramètres du Groupe</Text>
         <AnimatedPressable
@@ -115,7 +132,7 @@ export default function AdminScreen() {
           onPress={() =>
             router.push({
               pathname: '/modifier-regles',
-              params: { tontineId, tontineNom, ordrePublie: ordreVerrouille ? '1' : '0' },
+              params: { id: tontineId, tontineNom, ordrePublie: ordreVerrouille ? '1' : '0' },
             })
           }
         >
@@ -132,7 +149,7 @@ export default function AdminScreen() {
         </AnimatedPressable>
         <AnimatedPressable
           style={styles.settingsItem}
-          onPress={() => router.push({ pathname: '/exclure-membre', params: { tontineNom } })}
+          onPress={() => router.push({ pathname: '/exclure-membre', params: { id: tontineId, tontineNom } })}
         >
           <View style={styles.settingsLeft}>
             <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.danger, 0.08) }]}>

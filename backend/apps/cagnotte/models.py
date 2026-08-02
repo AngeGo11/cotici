@@ -8,7 +8,7 @@ class Cagnotte(Tontine):
     Hérite de Tontine (membres, QR, transactions) sans TontineRegle.
     """
 
-    nom_cagnotte = models.CharField(max_length=15)
+    nom_cagnotte = models.CharField(max_length=255)
     objectif_cotisation = models.IntegerField(
         help_text="Montant cible de la collecte en FCFA.",
     )
@@ -21,6 +21,12 @@ class Cagnotte(Tontine):
     class Meta:
         verbose_name = "Cagnotte"
         verbose_name_plural = "Cagnotte"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(objectif_cotisation__gt=0),
+                name="cagnotte_objectif_cotisation_positif",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         self.type_tontine = Tontine.TYPE_TONTINE.CAGNOTTE

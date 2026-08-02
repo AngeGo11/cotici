@@ -1,22 +1,23 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { AnimatedPressable, Card, EmptyState, InfoBanner, Skeleton } from '@/shared/ui';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { UPCOMING_DEADLINES } from '@/data/upcomingDeadlines';
+import { UPCOMING_DEADLINES, getMostUrgentDeadline, parseDueInDays } from '@/data/upcomingDeadlines';
 import { useWalletActivities } from '@/modules/activity/hooks';
 import {
   activityToneStyle,
@@ -30,6 +31,7 @@ import {
   getGreetingName,
   getUserInitials,
 } from '@/shared/auth';
+import { useUnreadNotificationsCount } from '@/modules/notifications/hooks';
 
 function formatTodayFr(): string {
   const d = new Date();
@@ -47,8 +49,25 @@ export default function HomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { user, refreshUser } = useAuth();
   const { activities, loading: loadingActivities } = useWalletActivities();
+  const unreadNotificationsCount = useUnreadNotificationsCount();
   const recentActivities = activities.slice(0, 5);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const balanceOpacity = useSharedValue(1);
+  const balanceAnimatedStyle = useAnimatedStyle(() => ({ opacity: balanceOpacity.value }));
+
+  useEffect(() => {
+    balanceOpacity.value = withTiming(0, { duration: 90 }, () => {
+      balanceOpacity.value = withTiming(1, { duration: 160 });
+    });
+    // Ne pas re-déclencher au montage initial, seulement quand balanceVisible change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balanceVisible]);
+
+  const toggleBalanceVisible = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setBalanceVisible((v) => !v);
+  }, []);
+
   const statScrollRef = useRef<ScrollView>(null);
   const [statPageIndex, setStatPageIndex] = useState(0);
 
@@ -67,6 +86,19 @@ export default function HomeScreen() {
   const tontineDisplay = `${formatFcfaDots(user?.tontine_cotisations_mois)} F`;
   const upcomingCount = UPCOMING_DEADLINES.length;
   const accentColor = Colors.success;
+
+  // Un seul bandeau d'échéance actif à la fois (le plus urgent), masquable
+  // pour la session en cours — ne duplique pas le centre de notifications.
+  const [urgentBannerDismissed, setUrgentBannerDismissed] = useState(false);
+  const mostUrgentDeadline = useMemo(() => getMostUrgentDeadline(UPCOMING_DEADLINES), []);
+  const mostUrgentDays = mostUrgentDeadline ? parseDueInDays(mostUrgentDeadline.dueRelative) : null;
+  const showUrgentBanner =
+    !urgentBannerDismissed && !!mostUrgentDeadline && mostUrgentDays != null && mostUrgentDays <= 3;
+  const urgentBannerText = mostUrgentDeadline
+    ? mostUrgentDays === 0
+      ? `${mostUrgentDeadline.title} — échéance aujourd'hui (${mostUrgentDeadline.amountF.toLocaleString('fr-FR')} F).`
+      : `${mostUrgentDeadline.title} — ${mostUrgentDeadline.dueRelative} (${mostUrgentDeadline.amountF.toLocaleString('fr-FR')} F).`
+    : '';
 
   const statCards = useMemo(
     () => [
@@ -94,7 +126,8 @@ export default function HomeScreen() {
         shortLabel: 'Mis en épargne',
         value: epargneDisplay,
         icon: 'target' as const,
-        tone: 'neutral' as const
+        // Progression positive : toujours vert, jamais neutre (loi de la couleur fonctionnelle).
+        tone: 'positive' as const,
       },
       {
         id: 'tontine',
@@ -102,7 +135,8 @@ export default function HomeScreen() {
         shortLabel: 'Engagements tontines',
         value: tontineDisplay,
         icon: 'users' as const,
-        tone: 'neutral' as const
+        // Engagement à venir : orange (attention requise), pas gris neutre.
+        tone: 'accent' as const,
       },
     ],
     [entreesDisplay, sortiesDisplay, epargneDisplay, tontineDisplay, router],
@@ -118,6 +152,11 @@ export default function HomeScreen() {
       iconBg: withOpacity(Colors.danger, 0.12),
       iconColor: Colors.danger,
       valueStyle: styles.statChipValueNeg,
+    },
+    accent: {
+      iconBg: withOpacity(Colors.accent, 0.12),
+      iconColor: Colors.accent,
+      valueStyle: styles.statChipValueAccent,
     },
     neutral: {
       iconBg: withOpacity(accentColor, 0.12),
@@ -146,12 +185,14 @@ export default function HomeScreen() {
   );
 
   const scrollStatsForward = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     const nextPage = Math.min(statPageIndex + 1, statPages.length - 1);
     statScrollRef.current?.scrollTo({ x: nextPage * screenWidth, animated: true });
     setStatPageIndex(nextPage);
   }, [statPageIndex, statPages.length, screenWidth]);
 
   const scrollStatsBack = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     const prevPage = Math.max(statPageIndex - 1, 0);
     statScrollRef.current?.scrollTo({ x: prevPage * screenWidth, animated: true });
     setStatPageIndex(prevPage);
@@ -201,11 +242,46 @@ export default function HomeScreen() {
               <Text style={styles.dateLine}>{dateLabel}</Text>
             </View>
           </View>
-          <AnimatedPressable style={styles.bellButton} onPress={() => router.push('/notifications')}>
+          <AnimatedPressable
+            style={styles.bellButton}
+            onPress={() => router.push('/notifications')}
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadNotificationsCount > 0
+                ? `Notifications, ${unreadNotificationsCount} non lues`
+                : 'Notifications'
+            }
+          >
             <Feather name="bell" size={20} color={Colors.gray[700]} />
-            <View style={styles.bellDot} />
+            {unreadNotificationsCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {unreadNotificationsCount > 9 ? '9+' : String(unreadNotificationsCount)}
+                </Text>
+              </View>
+            ) : null}
           </AnimatedPressable>
         </View>
+
+        {showUrgentBanner && mostUrgentDeadline ? (
+          <InfoBanner
+            icon={mostUrgentDays === 0 ? 'alert-triangle' : 'clock'}
+            tone={mostUrgentDays === 0 ? 'danger' : 'warning'}
+            text={urgentBannerText}
+            actionLabel={mostUrgentDeadline.kind === 'tontine' ? 'Payer maintenant' : 'Voir mon épargne'}
+            onAction={() => {
+              setUrgentBannerDismissed(true);
+              if (mostUrgentDeadline.kind === 'tontine' && mostUrgentDeadline.tontineId) {
+                router.push({
+                  pathname: '/tontine-details',
+                  params: { id: mostUrgentDeadline.tontineId, focus: 'payment' },
+                });
+              } else {
+                router.push('/(tabs)/savings');
+              }
+            }}
+          />
+        ) : null}
 
         <View style={styles.walletHero}>
           <View style={styles.balanceCard}>
@@ -222,7 +298,7 @@ export default function HomeScreen() {
               </View>
               <AnimatedPressable
                 style={styles.eyeButton}
-                onPress={() => setBalanceVisible(!balanceVisible)}
+                onPress={toggleBalanceVisible}
                 accessibilityRole="button"
                 accessibilityLabel={balanceVisible ? 'Masquer le solde' : 'Afficher le solde'}
               >
@@ -230,7 +306,7 @@ export default function HomeScreen() {
               </AnimatedPressable>
             </View>
 
-            <View style={styles.balanceValueBlock}>
+            <Animated.View style={[styles.balanceValueBlock, balanceAnimatedStyle]}>
               {balanceVisible ? (
                 <>
                   <Text style={styles.balanceValue}>{balanceDisplay}</Text>
@@ -239,7 +315,7 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.balanceValue}>••••••</Text>
               )}
-            </View>
+            </Animated.View>
           </View>
 
           <View style={styles.actionPillsRow}>
@@ -264,7 +340,7 @@ export default function HomeScreen() {
               accessibilityLabel="Faire un retrait"
             >
               <View style={[styles.actionPillIconCircle, styles.actionPillIconCircleWithdraw]}>
-                <Feather name="arrow-up-right" size={15} color={Colors.danger} />
+                <Feather name="arrow-up-right" size={15} color={Colors.success} />
               </View>
               <View style={styles.actionPillTexts}>
                 <Text style={[styles.actionPillLabel, styles.actionPillLabelWithdraw]}>Retrait</Text>
@@ -376,11 +452,26 @@ export default function HomeScreen() {
         </View>
 
         {loadingActivities ? (
-          <View style={styles.activityLoading}>
-            <ActivityIndicator color={Colors.success} />
+          <View style={styles.activitySkeletonList}>
+            {[0, 1, 2].map((i) => (
+              <Card key={i} variant="soft" style={styles.activitySkeletonCard}>
+                <Skeleton shape="circle" width={40} height={40} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Skeleton shape="text" width="50%" />
+                  <Skeleton shape="text" width="30%" height={11} />
+                </View>
+                <Skeleton shape="text" width={60} height={14} />
+              </Card>
+            ))}
           </View>
         ) : recentActivities.length === 0 ? (
-          <Text style={styles.activityEmpty}>Aucune activité pour le moment.</Text>
+          <EmptyState
+            icon="inbox"
+            title="Aucune activité pour le moment"
+            description="Vos dépôts, retraits et cotisations apparaîtront ici dès votre première action."
+            actionLabel="Faire un dépôt"
+            onAction={() => router.push('/deposit-to-account')}
+          />
         ) : (
           recentActivities.map((activity) => {
             const tone = resolveActivityToneFromDetail(activity);
@@ -388,35 +479,38 @@ export default function HomeScreen() {
             return (
             <AnimatedPressable
               key={activity.id}
-              style={styles.activityItem}
               onPress={() => router.push(`/activite/${activity.id}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`${activity.type}, ${activity.date}, ${formatActivityAmount(activity.amount, tone)}F`}
             >
-              <View style={styles.activityLeft}>
-                <View
+              <Card variant="soft" style={styles.activityItem}>
+                <View style={styles.activityLeft}>
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      { backgroundColor: toneStyle.iconBg },
+                    ]}
+                  >
+                    <Feather
+                      name={toneStyle.icon}
+                      size={20}
+                      color={toneStyle.iconColor}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.activityType}>{activity.type}</Text>
+                    <Text style={styles.activityDate}>{activity.date}</Text>
+                  </View>
+                </View>
+                <Text
                   style={[
-                    styles.activityIcon,
-                    { backgroundColor: toneStyle.iconBg },
+                    styles.activityAmount,
+                    { color: toneStyle.amountColor },
                   ]}
                 >
-                  <Feather
-                    name={toneStyle.icon}
-                    size={20}
-                    color={toneStyle.iconColor}
-                  />
-                </View>
-                <View>
-                  <Text style={styles.activityType}>{activity.type}</Text>
-                  <Text style={styles.activityDate}>{activity.date}</Text>
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.activityAmount,
-                  { color: toneStyle.amountColor },
-                ]}
-              >
-                {formatActivityAmount(activity.amount, tone)}F
-              </Text>
+                  {formatActivityAmount(activity.amount, tone)}F
+                </Text>
+              </Card>
             </AnimatedPressable>
             );
           })
@@ -464,7 +558,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Theme.shadow.soft,
   },
-  bellDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger },
+  bellBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: Colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Theme.screen.surface,
+  },
+  bellBadgeText: { fontFamily: Fonts.outfit.bold, fontSize: 10, color: Colors.white },
   walletHero: {
     marginBottom: Theme.spacing.lg,
   },
@@ -602,7 +710,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionPillIconCircleWithdraw: {
-    backgroundColor: withOpacity(Colors.danger, 0.1),
+    backgroundColor: withOpacity(Colors.success, 0.1),
   },
   actionPillTexts: {
     flex: 1,
@@ -716,6 +824,7 @@ const styles = StyleSheet.create({
   },
   statChipValuePos: { color: Colors.success },
   statChipValueNeg: { color: Colors.danger },
+  statChipValueAccent: { color: Colors.accent },
   navLinks: { paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.md, marginBottom: Theme.spacing.xl },
   navLinkButton: {
     flexDirection: 'row',
@@ -758,26 +867,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.md,
-    padding: Theme.spacing.lg,
     marginBottom: Theme.spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    ...Theme.shadow.soft,
   },
   activityLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   activityIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   activityType: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[900] },
   activityDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
   activityAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14 },
-  activityLoading: { paddingVertical: 24, alignItems: 'center' },
-  activityEmpty: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 14,
-    color: Colors.gray[500],
-    textAlign: 'center',
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.md,
-  },
+  activitySkeletonList: { paddingHorizontal: Theme.spacing.page, gap: Theme.spacing.sm },
+  activitySkeletonCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

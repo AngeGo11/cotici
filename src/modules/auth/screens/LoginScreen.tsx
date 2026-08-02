@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
-import { 
+import {
   View,
   Text,
   TextInput,
   StyleSheet,
   Image,
+  Alert,
  } from 'react-native';
 import { AnimatedPressable } from '@/shared/ui';
 import { useRouter } from 'expo-router';
@@ -13,6 +14,10 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
+
+/** Le flux Expo LocalAuthentication n'est pas encore implémenté (dépendance non
+ * installée) : on masque le bouton biométrique pour éviter une fausse affordance. */
+const BIOMETRIC_LOGIN_ENABLED = false;
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -80,7 +85,7 @@ export default function LoginScreen() {
         },
       });
     } catch {
-      setErrorMessage('Serveur inaccessible. Vérifie le proxy et le backend.');
+      setErrorMessage('Connexion impossible. Vérifiez votre connexion internet et réessayez.');
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +149,14 @@ export default function LoginScreen() {
         </AnimatedPressable>
         {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
-        <AnimatedPressable>
+        <AnimatedPressable
+          onPress={() =>
+            Alert.alert(
+              'Bientôt disponible',
+              'La réinitialisation du code PIN sera bientôt disponible. Contactez le support si vous êtes bloqué·e.'
+            )
+          }
+        >
           <Text style={styles.forgotPin}>Code PIN oublié ?</Text>
         </AnimatedPressable>
 
@@ -153,18 +165,19 @@ export default function LoginScreen() {
             Pas encore de compte ? <Text style={styles.createAccountBold}>Créer un compte</Text>
           </Text>
         </AnimatedPressable>
-
-        <AnimatedPressable onPress={() => router.push('/(tabs)')}>
-          <Text style={styles.demoLink}>Passer directement au dashboard →</Text>
-        </AnimatedPressable>
       </View>
 
-      <View style={styles.biometric}>
-        <Text style={styles.biometricLabel}>Ou connectez-vous avec</Text>
-        <AnimatedPressable style={styles.biometricButton}>
-          <Feather name="smartphone" size={32} color={Colors.brand} />
-        </AnimatedPressable>
-      </View>
+      {/* Authentification biométrique : masquée tant que le flux Expo LocalAuthentication
+          n'est pas implémenté (dépendance non installée). Ne pas ré-afficher ce bloc
+          sans onPress fonctionnel — cf. audit UX. */}
+      {BIOMETRIC_LOGIN_ENABLED ? (
+        <View style={styles.biometric}>
+          <Text style={styles.biometricLabel}>Ou connectez-vous avec</Text>
+          <AnimatedPressable style={styles.biometricButton}>
+            <Feather name="smartphone" size={32} color={Colors.brand} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -197,7 +210,6 @@ const styles = StyleSheet.create({
   createAccountWrap: { marginBottom: 16 },
   createAccountText: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500], textAlign: 'center' },
   createAccountBold: { color: Colors.accent, fontFamily: Fonts.outfit.medium },
-  demoLink: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[400], textAlign: 'center' },
   biometric: { alignItems: 'center', gap: 12, paddingBottom: 32 },
   biometricLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
   biometricButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: withOpacity(Colors.brand, 0.1), alignItems: 'center', justifyContent: 'center' },

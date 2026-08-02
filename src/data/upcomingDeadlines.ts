@@ -44,3 +44,29 @@ export const UPCOMING_DEADLINES: UpcomingDeadline[] = [
     turn: '5',
   },
 ];
+
+/** Extrait un nombre de jours restants depuis `dueRelative` (ex. "dans 3
+ * jours" → 3, "aujourd'hui" → 0). `null` si non parsable — donnée de démo
+ * texte libre, à remplacer par une vraie date d'échéance côté API. */
+export function parseDueInDays(dueRelative: string): number | null {
+  if (/aujourd/i.test(dueRelative)) return 0;
+  const match = dueRelative.match(/dans\s+(\d+)\s+jour/i);
+  if (match) return Number(match[1]);
+  return null;
+}
+
+/** Échéance la plus urgente parmi les prochaines (plus petit nombre de jours
+ * restants), ou `undefined` si aucune n'est parsable. */
+export function getMostUrgentDeadline(
+  deadlines: UpcomingDeadline[],
+): UpcomingDeadline | undefined {
+  let best: { deadline: UpcomingDeadline; days: number } | undefined;
+  for (const deadline of deadlines) {
+    const days = parseDueInDays(deadline.dueRelative);
+    if (days == null) continue;
+    if (!best || days < best.days) {
+      best = { deadline, days };
+    }
+  }
+  return best?.deadline;
+}

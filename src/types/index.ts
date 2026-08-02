@@ -64,10 +64,17 @@ export interface AppNotification {
   expediteurId?: string;
   objet: string;
   corps: string;
+  /** Libellé de date relatif déjà formaté pour l'affichage (ex. "Aujourd’hui · 09:14"). */
   date: string;
+  /** Date d'envoi brute (ISO), pour le tri/groupement par urgence. */
+  dateIso?: string;
   statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
   estLue: boolean;
-  category: 'invitation' | 'cotisation' | 'paiement' | 'systeme';
+  category: 'invitation' | 'cotisation' | 'paiement' | 'systeme' | 'epargne';
+  /** Type de ressource source (backend), pour le deep-link au tap. */
+  sourceType?: string;
+  /** Identifiant de la ressource source (backend), pour le deep-link au tap. */
+  sourceId?: number;
 }
 
 export interface Invitation {

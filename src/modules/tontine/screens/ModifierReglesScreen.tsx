@@ -1,50 +1,194 @@
-import { useState, useMemo } from 'react';
-import { 
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  StyleSheet,
-  Switch,
- } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { AnimatedPressable, InfoBanner } from '@/shared/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
-import { ORDRE_LOCK_MESSAGE } from '@/modules/tontine/data/tontinePhase';
+import { modifierRegles } from '@/shared/api';
+import { useTontineDetail } from '@/modules/tontine/hooks/useTontineDetail';
 
-const DEFAULT_NOM = 'Tontine Entrepreneurs';
+const FREQUENCE_OPTIONS = [
+  { value: 'JOURNALIER', label: 'Journalier' },
+  { value: 'HEBDOMADAIRE', label: 'Hebdo.' },
+  { value: 'MENSUEL', label: 'Mensuel' },
+  { value: 'PERSONNALISÉE', label: 'Personnalisée' },
+] as const;
+
+const ORDRE_OPTIONS = [
+  { value: "DÉFINI PAR L'ADMIN", label: "Défini par l'admin" },
+  { value: 'ALÉATOIRE', label: 'Aléatoire' },
+] as const;
+
+const DEFAULT_NOM = 'ce groupe';
 
 export default function ModifierReglesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ tontineNom?: string; ordrePublie?: string }>();
+  const params = useLocalSearchParams<{ id?: string; tontineNom?: string }>();
+  const tontineId = typeof params.id === 'string' ? params.id : undefined;
   const tontineNom = useMemo(
     () => (typeof params.tontineNom === 'string' && params.tontineNom ? params.tontineNom : DEFAULT_NOM),
     [params.tontineNom],
   );
-  const ordrePublie = params.ordrePublie === '1';
+  const { detail, loading, error } = useTontineDetail(tontineId);
 
-  const [monthlyAmount, setMonthlyAmount] = useState('120000');
-  const [frequency, setFrequency] = useState<'weekly' | 'monthly' | 'biweekly'>('monthly');
-  const [cycleMonths, setCycleMonths] = useState('12');
-  const [graceDays, setGraceDays] = useState('3');
-  const [penaltiesEnabled, setPenaltiesEnabled] = useState(true);
-  const [penaltyAmount, setPenaltyAmount] = useState('5000');
-  const [quorum, setQuorum] = useState('50');
-  const [note, setNote] = useState('');
+  const [montantCotisation, setMontantCotisation] = useState('');
+  const [nombreMax, setNombreMax] = useState('');
+  const [frequence, setFrequence] = useState<string>('MENSUEL');
+  const [frequencePersonnalise, setFrequencePersonnalise] = useState('');
+  const [ordreRamassage, setOrdreRamassage] = useState<string>('ALÉATOIRE');
+  const [montantPenalite, setMontantPenalite] = useState('');
+  const [initialized, setInitialized] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (initialized || !detail?.regles) return;
+    const regle = detail.regles;
+    setMontantCotisation(String(Math.round(Number(regle.montant_cotisation))));
+    setNombreMax(String(regle.nombre_max));
+    setFrequence(regle.frequence);
+    setFrequencePersonnalise(regle.frequence_personnalise ? String(regle.frequence_personnalise) : '');
+    setOrdreRamassage(regle.ordre_ramassage);
+    setMontantPenalite(String(Math.round(Number(regle.montant_penalite))));
+    setInitialized(true);
+  }, [detail, initialized]);
+
+  const cycleDemarre = Boolean(detail && (detail.phase === 'active' || detail.phase === 'completed'));
+  const ordrePublie = detail?.ordre_publie ?? false;
+
+  const financialFieldsChanged = useMemo(() => {
+    if (!detail?.regles) return false;
+    const regle = detail.regles;
+    return (
+      String(Math.round(Number(regle.montant_cotisation))) !== montantCotisation ||
+      String(regle.nombre_max) !== nombreMax ||
+      regle.frequence !== frequence ||
+      (regle.frequence_personnalise ? String(regle.frequence_personnalise) : '') !== frequencePersonnalise ||
+      regle.ordre_ramassage !== ordreRamassage
+    );
+  }, [detail, montantCotisation, nombreMax, frequence, frequencePersonnalise, ordreRamassage]);
 
   const save = () => {
-    router.back();
+    if (!detail?.regles || !tontineId) return;
+    const regle = detail.regles;
+    const payload: Record<string, number | string> = {};
+
+    if (!cycleDemarre) {
+      if (String(Math.round(Number(regle.montant_cotisation))) !== montantCotisation) {
+        const value = parseInt(montantCotisation, 10);
+        if (!Number.isFinite(value) || value <= 0) {
+          Alert.alert('Montant invalide', 'Le montant de la cotisation doit être un nombre positif.');
+          return;
+        }
+        payload.montant_cotisation = value;
+      }
+      if (String(regle.nombre_max) !== nombreMax) {
+        const value = parseInt(nombreMax, 10);
+        if (!Number.isFinite(value) || value < 2) {
+          Alert.alert('Valeur invalide', 'Le nombre maximum de participants doit être d’au moins 2.');
+          return;
+        }
+        payload.nombre_max = value;
+      }
+      if (regle.frequence !== frequence) {
+        payload.frequence = frequence;
+      }
+      const personnaliseChanged =
+        (regle.frequence_personnalise ? String(regle.frequence_personnalise) : '') !== frequencePersonnalise;
+      if (frequence === 'PERSONNALISÉE') {
+        const value = parseInt(frequencePersonnalise, 10);
+        if (!Number.isFinite(value) || value <= 0) {
+          Alert.alert('Valeur invalide', 'Précisez le nombre de jours pour la fréquence personnalisée.');
+          return;
+        }
+        if (personnaliseChanged || regle.frequence !== frequence) {
+          payload.frequence_personnalise = value;
+        }
+      }
+      if (regle.ordre_ramassage !== ordreRamassage) {
+        payload.ordre_ramassage = ordreRamassage;
+      }
+    }
+
+    if (String(Math.round(Number(regle.montant_penalite))) !== montantPenalite) {
+      const value = parseInt(montantPenalite, 10);
+      if (!Number.isFinite(value) || value < 0) {
+        Alert.alert('Valeur invalide', 'Le montant de la pénalité doit être positif ou nul.');
+        return;
+      }
+      payload.montant_penalite = value;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      router.back();
+      return;
+    }
+
+    const hasFinancialChange = Object.keys(payload).some((k) => k !== 'montant_penalite');
+
+    const doSave = () => {
+      void (async () => {
+        setSaving(true);
+        const result = await modifierRegles({ tontine_id: Number(tontineId), ...payload });
+        setSaving(false);
+        if (!result.ok) {
+          const lockedMsg =
+            result.champs_verrouilles && result.champs_verrouilles.length > 0
+              ? `\n\nChamps verrouillés : ${result.champs_verrouilles.join(', ')}`
+              : '';
+          Alert.alert('Erreur', `${result.detail}${lockedMsg}`);
+          return;
+        }
+        router.back();
+      })();
+    };
+
+    if (hasFinancialChange) {
+      Alert.alert(
+        'Confirmer les modifications',
+        'Ces changements sont significatifs : tous les membres actifs (hors hôte) devront ré-accepter les règles avant de continuer à participer.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Confirmer', onPress: doSave },
+        ],
+      );
+    } else {
+      doSave();
+    }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.brand} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !detail || !detail.regles) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error ?? 'Règles introuvables pour cette tontine.'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <AnimatedPressable style={styles.backButton} onPress={() => router.back()} >
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
             <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
           </AnimatedPressable>
         </View>
@@ -55,160 +199,146 @@ export default function ModifierReglesScreen() {
           </View>
           <Text style={styles.heroTitle}>Modifier les règles</Text>
           <Text style={styles.heroSubtitle}>{tontineNom}</Text>
-          <Text style={styles.heroHint}>
-            Les changements s’appliqueront au prochain cycle, sauf mention contraire auprès des membres.
-          </Text>
         </View>
 
-        {ordrePublie ? (
-          <View style={styles.ordreLockBanner}>
-            <Feather name="lock" size={18} color={Colors.gray[600]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ordreLockTitle}>Ordre de ramassage verrouillé</Text>
-              <Text style={styles.ordreLockDesc}>{ORDRE_LOCK_MESSAGE}</Text>
-            </View>
-          </View>
+        {cycleDemarre ? (
+          <InfoBanner
+            icon="lock"
+            tone="neutral"
+            text="Le cycle de cotisation a déjà démarré : seul le montant de la pénalité peut encore être modifié. Les autres règles sont verrouillées pour préserver l'équilibre financier du cycle en cours."
+          />
+        ) : null}
+
+        {!cycleDemarre && ordrePublie ? (
+          <InfoBanner
+            icon="lock"
+            tone="warning"
+            text="L'ordre de ramassage a été publié et ne peut plus être modifié depuis ce formulaire."
+          />
         ) : null}
 
         <Text style={styles.sectionEyebrow}>Cotisation & calendrier</Text>
 
         <View style={styles.fieldBlock}>
           <Text style={styles.label}>Montant de la mise</Text>
-          <View style={styles.inputWithUnit}>
+          <View style={[styles.inputWithUnit, cycleDemarre && styles.inputDisabled]}>
             <TextInput
               style={styles.inputField}
-              value={monthlyAmount}
-              onChangeText={setMonthlyAmount}
+              value={montantCotisation}
+              onChangeText={setMontantCotisation}
               placeholder="0"
               placeholderTextColor={Colors.gray[400]}
               keyboardType="number-pad"
+              editable={!cycleDemarre}
             />
             <Text style={styles.unit}>FCFA</Text>
           </View>
         </View>
 
         <View style={styles.fieldBlock}>
+          <Text style={styles.label}>Nombre maximum de participants</Text>
+          <View style={[styles.inputWithUnit, cycleDemarre && styles.inputDisabled]}>
+            <TextInput
+              style={styles.inputField}
+              value={nombreMax}
+              onChangeText={setNombreMax}
+              placeholder="0"
+              placeholderTextColor={Colors.gray[400]}
+              keyboardType="number-pad"
+              editable={!cycleDemarre}
+            />
+            <Text style={styles.unit}>membres</Text>
+          </View>
+        </View>
+
+        <View style={styles.fieldBlock}>
           <Text style={styles.label}>Fréquence</Text>
           <View style={styles.toggleRow}>
-            {(
-              [
-                { key: 'weekly' as const, label: 'Hebdo.' },
-                { key: 'biweekly' as const, label: 'Bi-mensuel' },
-                { key: 'monthly' as const, label: 'Mensuel' },
-              ] as const
-            ).map(({ key, label }) => (
+            {FREQUENCE_OPTIONS.map(({ value, label }) => (
               <AnimatedPressable
-                key={key}
-                style={[styles.togglePill, frequency === key && styles.togglePillActive]}
-                onPress={() => setFrequency(key)} >
-                <Text style={[styles.togglePillText, frequency === key && styles.togglePillTextActive]}>{label}</Text>
+                key={value}
+                style={[styles.togglePill, frequence === value && styles.togglePillActive, cycleDemarre && styles.pillDisabled]}
+                onPress={() => !cycleDemarre && setFrequence(value)}
+                disabled={cycleDemarre}
+              >
+                <Text style={[styles.togglePillText, frequence === value && styles.togglePillTextActive]}>{label}</Text>
               </AnimatedPressable>
             ))}
           </View>
         </View>
 
+        {frequence === 'PERSONNALISÉE' ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Intervalle personnalisé</Text>
+            <View style={[styles.inputWithUnit, cycleDemarre && styles.inputDisabled]}>
+              <TextInput
+                style={styles.inputField}
+                value={frequencePersonnalise}
+                onChangeText={setFrequencePersonnalise}
+                placeholder="Ex. : 10"
+                placeholderTextColor={Colors.gray[400]}
+                keyboardType="number-pad"
+                editable={!cycleDemarre}
+              />
+              <Text style={styles.unit}>jours</Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Durée d’un tour de table (mois)</Text>
-          <View style={styles.inputWithUnit}>
-            <TextInput
-              style={styles.inputField}
-              value={cycleMonths}
-              onChangeText={setCycleMonths}
-              placeholder="12"
-              placeholderTextColor={Colors.gray[400]}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.unit}>mois</Text>
+          <Text style={styles.label}>Ordre de ramassage</Text>
+          <View style={styles.toggleRow}>
+            {ORDRE_OPTIONS.map(({ value, label }) => (
+              <AnimatedPressable
+                key={value}
+                style={[
+                  styles.togglePill,
+                  ordreRamassage === value && styles.togglePillActive,
+                  (cycleDemarre || ordrePublie) && styles.pillDisabled,
+                ]}
+                onPress={() => !cycleDemarre && !ordrePublie && setOrdreRamassage(value)}
+                disabled={cycleDemarre || ordrePublie}
+              >
+                <Text style={[styles.togglePillText, ordreRamassage === value && styles.togglePillTextActive]}>{label}</Text>
+              </AnimatedPressable>
+            ))}
           </View>
         </View>
 
+        <Text style={styles.sectionEyebrow}>Pénalités</Text>
+
         <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Délai de grâce (jours) après l’échéance</Text>
+          <Text style={styles.label}>Montant de la pénalité (0 = désactivées)</Text>
           <View style={styles.inputWithUnit}>
             <TextInput
               style={styles.inputField}
-              value={graceDays}
-              onChangeText={setGraceDays}
+              value={montantPenalite}
+              onChangeText={setMontantPenalite}
+              keyboardType="number-pad"
               placeholder="0"
               placeholderTextColor={Colors.gray[400]}
-              keyboardType="number-pad"
             />
-            <Text style={styles.unit}>j</Text>
+            <Text style={styles.unit}>FCFA</Text>
           </View>
         </View>
 
-        <Text style={styles.sectionEyebrow}>Pénalités & gouvernance</Text>
-
-        <View style={styles.advancedCard}>
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.switchTitle}>Pénalités actives</Text>
-              <Text style={styles.switchHint}>En cas de retard de cotisation (hors période de grâce).</Text>
-            </View>
-            <Switch
-              value={penaltiesEnabled}
-              onValueChange={setPenaltiesEnabled}
-              trackColor={{ false: Colors.gray[200], true: withOpacity(Colors.brand, 0.45) }}
-              thumbColor={penaltiesEnabled ? Colors.brand : Colors.gray[400]}
-            />
-          </View>
-          {penaltiesEnabled ? (
-            <View style={[styles.fieldBlock, { marginTop: 16, marginBottom: 0 }]}>
-              <Text style={styles.label}>Montant de la pénalité</Text>
-              <View style={styles.inputWithUnit}>
-                <TextInput
-                  style={styles.inputField}
-                  value={penaltyAmount}
-                  onChangeText={setPenaltyAmount}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                  placeholderTextColor={Colors.gray[400]}
-                />
-                <Text style={styles.unit}>FCFA</Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Quorum de vote (règles & exclusions)</Text>
-          <View style={styles.inputWithUnit}>
-            <TextInput
-              style={styles.inputField}
-              value={quorum}
-              onChangeText={setQuorum}
-              placeholder="50"
-              placeholderTextColor={Colors.gray[400]}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.unit}>% des membres</Text>
-          </View>
-        </View>
-
-        <View style={styles.fieldBlock}>
-          <Text style={styles.label}>Note interne (optionnelle)</Text>
-          <TextInput
-            style={styles.textarea}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Ex. : ajustement suite à l’assemblée du 10/02/2026"
-            placeholderTextColor={Colors.gray[400]}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
+        {financialFieldsChanged && !cycleDemarre ? (
+          <InfoBanner
+            icon="alert-triangle"
+            tone="warning"
+            text="Ces changements financiers réinitialiseront l'acceptation des règles des membres actifs (hors hôte), qui devront les ré-accepter."
           />
-        </View>
+        ) : null}
 
-        <View style={styles.infoBanner}>
-          <Feather name="info" size={20} color={Colors.info} />
-          <Text style={styles.infoText}>
-            Pensez à informer le groupe (discussion ou notification) des changements importants.
-          </Text>
-        </View>
-
-        <AnimatedPressable style={styles.saveButton} onPress={save} >
-          <Feather name="check" size={20} color={Colors.white} />
-          <Text style={styles.saveText}>Enregistrer les modifications</Text>
+        <AnimatedPressable style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={save} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <>
+              <Feather name="check" size={20} color={Colors.white} />
+              <Text style={styles.saveText}>Enregistrer les modifications</Text>
+            </>
+          )}
         </AnimatedPressable>
 
         <View style={{ height: 40 }} />
@@ -219,6 +349,8 @@ export default function ModifierReglesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.screen.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Theme.spacing.page },
+  errorText: { fontFamily: Fonts.outfit.regular, fontSize: 15, color: Colors.gray[600], textAlign: 'center' },
   scroll: { paddingBottom: 32 },
   header: { paddingHorizontal: Theme.spacing.page, paddingVertical: Theme.spacing.sm },
   backButton: {
@@ -242,31 +374,6 @@ const styles = StyleSheet.create({
   },
   heroTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.gray[900], marginBottom: 4, textAlign: 'center' },
   heroSubtitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.brand, marginBottom: 8, textAlign: 'center' },
-  heroHint: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[600], textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
-  ordreLockBanner: {
-    flexDirection: 'row',
-    gap: 12,
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.lg,
-    padding: Theme.spacing.lg,
-    backgroundColor: Colors.gray[50],
-    borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    alignItems: 'flex-start',
-  },
-  ordreLockTitle: {
-    fontFamily: Fonts.outfit.medium,
-    fontSize: 14,
-    color: Colors.gray[900],
-    marginBottom: 4,
-  },
-  ordreLockDesc: {
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 13,
-    color: Colors.gray[600],
-    lineHeight: 19,
-  },
   sectionEyebrow: {
     fontFamily: Fonts.outfit.medium,
     fontSize: 13,
@@ -286,6 +393,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray[100],
     ...Theme.shadow.soft,
   },
+  inputDisabled: { opacity: 0.5 },
   inputField: {
     flex: 1,
     paddingHorizontal: Theme.spacing.lg,
@@ -305,46 +413,9 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.screen.surface,
   },
   togglePillActive: { backgroundColor: Colors.brand, borderColor: Colors.brand },
+  pillDisabled: { opacity: 0.5 },
   togglePillText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[700] },
   togglePillTextActive: { color: Colors.white },
-  advancedCard: {
-    marginHorizontal: Theme.spacing.page,
-    borderRadius: Theme.radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    backgroundColor: Theme.screen.surface,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.lg,
-    ...Theme.shadow.soft,
-  },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  switchTitle: { fontFamily: Fonts.outfit.medium, fontSize: 15, color: Colors.gray[900], marginBottom: 4 },
-  switchHint: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[600], lineHeight: 18 },
-  textarea: {
-    marginHorizontal: Theme.spacing.page,
-    minHeight: 88,
-    backgroundColor: Theme.screen.surface,
-    borderRadius: Theme.radius.md,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: 12,
-    fontFamily: Fonts.outfit.regular,
-    fontSize: 15,
-    color: Colors.gray[900],
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    gap: 10,
-    marginHorizontal: Theme.spacing.page,
-    marginBottom: Theme.spacing.lg,
-    padding: 14,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: withOpacity(Colors.info, 0.08),
-    borderWidth: 1,
-    borderColor: withOpacity(Colors.info, 0.2),
-  },
-  infoText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.info, lineHeight: 20 },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,6 +425,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand,
     paddingVertical: 16,
     borderRadius: Theme.radius.lg,
+    marginTop: Theme.spacing.md,
   },
+  saveButtonDisabled: { opacity: 0.7 },
   saveText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
 });

@@ -1,3 +1,4 @@
+import dataclasses
 from decimal import Decimal
 
 from django.db import transaction
@@ -8,9 +9,24 @@ from rest_framework.decorators import permission_classes, api_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.notifications.domain.catalog import spec_epargne_palier
+from apps.notifications.domain.dedup import dedup_epargne_palier
+from apps.notifications.services.notification_service import NotificationService
 from apps.savings.models import EpargnePersonnelle
-from apps.utils.utilitaires import _resolve_payment_mode, _unique_ref, _parse_positive_int
+from apps.savings.serializers import (
+    DepositSavingsSerializer,
+    GoalIdSerializer,
+    SavingsPayloadSerializer,
+)
+from apps.utils.utilitaires import _paginate_and_serialize, _unique_ref
 from apps.wallet.models import Transaction, Wallet
+
+# Paliers de progression notifiés une seule fois chacun (idempotence via
+# dedup_epargne_palier) : un dépôt qui fait franchir plusieurs paliers d'un
+# coup (ex. 40% -> 100%) déclenche bien les trois notifications, mais un
+# retrait qui fait redescendre sous un palier déjà notifié, suivi d'un
+# nouveau dépôt qui le refranchit, ne renotifie jamais (anti-oscillation).
+_PALIERS_EPARGNE = (50, 80, 100)
 
 ETAT = EpargnePersonnelle.ETAT
 
@@ -37,6 +53,29 @@ def _serialize_epargne(epargne):
         "date_archivage": _dt_iso(epargne.date_archivage),
         "date_suppression": _dt_iso(epargne.date_suppression),
     }
+
+
+def _emit_palier_notifications(epargne: EpargnePersonnelle, montant_avant: Decimal) -> None:
+    """Émet une notification (idempotente) pour chaque palier de progression
+    franchi par ce dépôt, événementiel (pas un job) : le pourcentage d'un
+    objectif d'épargne ne change qu'à un dépôt.
+    """
+    objectif = Decimal(epargne.objectif_cotisation)
+    if objectif <= 0:
+        return
+    pct_avant = (montant_avant / objectif) * 100
+    pct_apres = (epargne.montant_courant / objectif) * 100
+    for seuil in _PALIERS_EPARGNE:
+        if pct_avant < seuil <= pct_apres:
+            NotificationService.emit_idempotent(
+                destinataire=epargne.hote,
+                spec=dataclasses.replace(
+                    spec_epargne_palier(
+                        nom_projet=epargne.nom_projet, epargne_id=epargne.id, seuil=seuil
+                    ),
+                    dedup_key=dedup_epargne_palier(epargne_id=epargne.id, seuil=seuil),
+                ),
+            )
 
 
 def _active_savings_qs(user):
@@ -81,30 +120,11 @@ def _require_zero_balance(epargne):
     return None
 
 
-VALID_CATEGORIES = ["Voyage", "Projet personnel", "Mariage", "Éducation", "Santé", "Autre"]
-
-
-def _resolve_categorie(data):
-    categorie_choisie = (data.get("categorie") or "").strip()
-    if categorie_choisie == "Autre":
-        categorie = (data.get("value_categorie") or "").strip()
-        if not categorie:
-            return None, Response(
-                {"detail": "Veuillez préciser la catégorie de votre projet."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return categorie, None
-    if categorie_choisie in VALID_CATEGORIES:
-        return categorie_choisie, None
-    return None, Response({"detail": "Catégorie invalide."}, status=status.HTTP_400_BAD_REQUEST)
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def list_savings(request):
     epargnes = _active_savings_qs(request.user).order_by("-date_creation", "-id")
-    results = [_serialize_epargne(epargne) for epargne in epargnes]
-    return Response({"count": len(results), "results": results})
+    return Response(_paginate_and_serialize(request, epargnes, _serialize_epargne))
 
 
 @api_view(["GET"])
@@ -114,8 +134,7 @@ def list_archived_savings(request):
         EpargnePersonnelle.objects.filter(hote=request.user, etat=ETAT.ARCHIVE)
         .order_by("-date_archivage", "-id")
     )
-    results = [_serialize_epargne(epargne) for epargne in epargnes]
-    return Response({"count": len(results), "results": results})
+    return Response(_paginate_and_serialize(request, epargnes, _serialize_epargne))
 
 
 @api_view(["POST"])
@@ -123,23 +142,13 @@ def list_archived_savings(request):
 def create_savings(request):
     user = request.user
 
-    nom_projet = (request.data.get("nom_projet") or "").strip()
-    if not nom_projet:
-        return Response({"detail": "Le nom du projet est obligatoire."}, status=status.HTTP_400_BAD_REQUEST)
-
-    montant_cible = _parse_positive_int(request.data.get("montant_cible"))
-    if montant_cible is None:
-        return Response({"detail": "Entrez le montant cible."}, status=status.HTTP_400_BAD_REQUEST)
-
-    duree = _parse_positive_int(request.data.get("duree"))
-    if duree is None:
-        return Response({"detail": "Veuillez préciser la durée."}, status=status.HTTP_400_BAD_REQUEST)
-    if duree <= 0:
-        return Response({"detail": "La durée ne peut pas être négative ou égale à 0."}, status=status.HTTP_400_BAD_REQUEST)
-
-    categorie, categorie_error = _resolve_categorie(request.data)
-    if categorie_error is not None:
-        return categorie_error
+    serializer = SavingsPayloadSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"detail": serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST)
+    nom_projet = serializer.validated_data["nom_projet"]
+    montant_cible = serializer.validated_data["montant_cible"]
+    duree = serializer.validated_data["duree"]
+    categorie = serializer.validated_data["categorie"]
 
     epargne = EpargnePersonnelle.objects.create(
         hote=user,
@@ -166,12 +175,12 @@ def create_savings(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_savings_detail(request):
-    goal_id = _parse_positive_int(request.query_params.get("id"))
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.query_params)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     epargne, err = _get_readable_goal(request.user, goal_id)
     if err is not None:
@@ -183,22 +192,14 @@ def get_savings_detail(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def deposit_to_savings(request):
-    goal_id = _parse_positive_int(request.data.get("id"))
     user = request.user
 
-    if goal_id is None:
-        return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    montant = _parse_positive_int(request.data.get("montant"))
-    if montant is None:
-        return Response({"detail": "Montant invalide."}, status=status.HTTP_400_BAD_REQUEST)
-
-    mode = _resolve_payment_mode(request.data.get("mode_de_paiement"))
-    if mode is None:
-        return Response({"detail": "Mode de paiement inconnu."}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = DepositSavingsSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"detail": serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST)
+    goal_id = serializer.validated_data["id"]
+    montant = serializer.validated_data["montant"]
+    mode = serializer.validated_data["mode_de_paiement"]
 
     amount = Decimal(montant)
     ref = ""
@@ -229,10 +230,12 @@ def deposit_to_savings(request):
         wallet.solde_courant -= amount
         wallet.save(update_fields=["solde_courant"])
 
+        montant_avant = epargne.montant_courant
         epargne.montant_courant += amount
         if epargne.montant_courant >= Decimal(epargne.objectif_cotisation):
             epargne.objectif_atteint = True
         epargne.save(update_fields=["montant_courant", "objectif_atteint"])
+        _emit_palier_notifications(epargne, montant_avant)
 
         ref = _unique_ref("V")
         Transaction.objects.create(
@@ -252,39 +255,28 @@ def deposit_to_savings(request):
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def update_savings(request):
-    goal_id = _parse_positive_int(request.data.get("id"))
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.data)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     epargne = _active_savings_qs(request.user).filter(id=goal_id).first()
     if epargne is None:
         return _goal_not_found_response(request.user, goal_id)
 
-    nom_projet = (request.data.get("nom_projet") or "").strip()
-    if not nom_projet:
-        return Response({"detail": "Le nom du projet est obligatoire."}, status=status.HTTP_400_BAD_REQUEST)
-
-    montant_cible = _parse_positive_int(request.data.get("montant_cible"))
-    if montant_cible is None:
-        return Response({"detail": "Entrez le montant cible."}, status=status.HTTP_400_BAD_REQUEST)
-    if montant_cible < epargne.montant_courant:
+    payload_serializer = SavingsPayloadSerializer(
+        data=request.data, context={"montant_courant": epargne.montant_courant}
+    )
+    if not payload_serializer.is_valid():
         return Response(
-            {"detail": "Le montant cible ne peut pas être inférieur au montant déjà épargné."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": payload_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
-
-    duree = _parse_positive_int(request.data.get("duree"))
-    if duree is None:
-        return Response({"detail": "Veuillez préciser la durée."}, status=status.HTTP_400_BAD_REQUEST)
-    if duree <= 0:
-        return Response({"detail": "La durée ne peut pas être négative ou égale à 0."}, status=status.HTTP_400_BAD_REQUEST)
-
-    categorie, categorie_error = _resolve_categorie(request.data)
-    if categorie_error is not None:
-        return categorie_error
+    nom_projet = payload_serializer.validated_data["nom_projet"]
+    montant_cible = payload_serializer.validated_data["montant_cible"]
+    duree = payload_serializer.validated_data["duree"]
+    categorie = payload_serializer.validated_data["categorie"]
 
     epargne.nom_projet = nom_projet
     epargne.objectif_cotisation = montant_cible
@@ -298,12 +290,12 @@ def update_savings(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_transactions_for_savings(request):
-    goal_id = _parse_positive_int(request.query_params.get("id"))
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.query_params)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     epargne, err = _get_readable_goal(request.user, goal_id)
     if err is not None:
@@ -339,14 +331,14 @@ def get_transactions_for_savings(request):
 @permission_classes([IsAuthenticated])
 def withdraw_from_savings(request):
     """Retrait vers le solde principal lorsque l'objectif est atteint."""
-    goal_id = _parse_positive_int(request.data.get("id"))
     user = request.user
 
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.data)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     ref = ""
 
@@ -410,14 +402,14 @@ def withdraw_from_savings(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def archive_savings(request):
-    goal_id = _parse_positive_int(request.data.get("id"))
     user = request.user
 
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.data)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     with transaction.atomic():
         epargne = (
@@ -443,14 +435,14 @@ def archive_savings(request):
 @permission_classes([IsAuthenticated])
 def delete_savings(request):
     """Suppression logique : l'objectif n'apparaît plus dans les listes."""
-    goal_id = _parse_positive_int(request.data.get("id"))
     user = request.user
 
-    if goal_id is None:
+    id_serializer = GoalIdSerializer(data=request.data)
+    if not id_serializer.is_valid():
         return Response(
-            {"detail": "Identifiant d'objectif invalide."},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"detail": id_serializer.errors["detail"][0]}, status=status.HTTP_400_BAD_REQUEST
         )
+    goal_id = id_serializer.validated_data["id"]
 
     with transaction.atomic():
         epargne = (

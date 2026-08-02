@@ -40,6 +40,9 @@ export type TontineSummary = {
   description: string;
   nom: string;
   est_active: boolean;
+  etat?: string;
+  date_archivage?: string | null;
+  date_suppression?: string | null;
   date_creation: string;
   qr_code: string;
   hote_id: number;
@@ -440,6 +443,39 @@ export async function changerTour(
   return { ok: true, data: body as ChangerTourResponse };
 }
 
+async function postTontineLifecycleAction(
+  path: string,
+  id: string | number,
+  fallback: string,
+): Promise<{ ok: true; data: TontineSummary } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth(path, {
+    method: 'POST',
+    body: JSON.stringify({ id: Number(id) }),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, fallback) };
+  }
+  return { ok: true, data: body as TontineSummary };
+}
+
+export function archiveGroupeTontine(id: string | number) {
+  return postTontineLifecycleAction(
+    '/api/tontine/archive/',
+    id,
+    'Impossible d’archiver cette tontine.',
+  );
+}
+
+export function deleteGroupeTontine(id: string | number) {
+  return postTontineLifecycleAction(
+    '/api/tontine/delete/',
+    id,
+    'Impossible de supprimer cette tontine.',
+  );
+}
+
 /** Mapping UI → API pour la création de règles */
 export function mapFrequencyToApi(freq: 'daily' | 'weekly' | 'monthly' | 'custom'): string {
   const map = {
@@ -457,4 +493,234 @@ export function mapOrdreToApi(mode: 'random' | 'admin'): string {
 
 export function mapPenaltyTypeToApi(type: 'retard' | 'absence'): string {
   return type === 'retard' ? 'RETARD PAIEMENT' : 'ABSENCE PAIEMENT';
+}
+
+/* --------------------------------------------------------------------- */
+/* Administration de groupe : membres, rôles, règles, pénalités          */
+/* --------------------------------------------------------------------- */
+
+export type MembreGroupe = {
+  id: number;
+  user_id: number;
+  name: string;
+  role: 'ADMINISTRATEUR' | 'PARTICIPANT';
+  statut: string;
+  ordre_ramassage: number;
+  regles_acceptees: boolean;
+  is_hote: boolean;
+  penalites_impayees: string;
+  a_cotise_tour_courant: boolean;
+  /** Présents uniquement si le demandeur est admin. */
+  numero_telephone?: string;
+  peut_etre_exclu?: boolean;
+  motif_blocage_exclusion?: string | null;
+};
+
+export type MembresGroupeResponse = {
+  count: number;
+  results: MembreGroupe[];
+};
+
+export type ExclureMembreResult = {
+  detail: string;
+  membre_exclu_id: number;
+  penalites_impayees: string;
+  tontine: TontineDetail;
+};
+
+export async function fetchMembresGroupe(
+  tontineId: string | number,
+): Promise<{ ok: true; data: MembresGroupeResponse } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth(
+    `/api/tontine/membres/?tontine_id=${encodeURIComponent(String(tontineId))}`,
+    { method: 'GET' },
+  );
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible de charger les membres.') };
+  }
+  const data = body as MembresGroupeResponse;
+  if (!Array.isArray(data?.results)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
+}
+
+export async function exclureMembre(params: {
+  tontine_id: number;
+  user_id: number;
+  motif?: string;
+}): Promise<{ ok: true; data: ExclureMembreResult } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth('/api/tontine/membres/exclure/', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible d’exclure ce membre.') };
+  }
+  return { ok: true, data: body as ExclureMembreResult };
+}
+
+export type SetMemberRoleResult = {
+  detail: string;
+  membre_id: number;
+  user_id: number;
+  role: 'ADMINISTRATEUR' | 'PARTICIPANT';
+};
+
+export async function setMemberRole(params: {
+  tontine_id: number;
+  user_id: number;
+  role: 'ADMINISTRATEUR' | 'PARTICIPANT';
+}): Promise<{ ok: true; data: SetMemberRoleResult } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth('/api/tontine/membres/role/', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible de modifier le rôle.') };
+  }
+  return { ok: true, data: body as SetMemberRoleResult };
+}
+
+export type ModifierReglesParams = {
+  tontine_id: number;
+  montant_cotisation?: number;
+  nombre_max?: number;
+  ordre_ramassage?: string;
+  frequence?: string;
+  frequence_personnalise?: number;
+  montant_penalite?: number;
+};
+
+export type ModifierReglesResult = {
+  detail: string;
+  regle: TontineRegle;
+  champs_modifies: string[];
+};
+
+export type ModifierReglesError = {
+  ok: false;
+  detail: string;
+  champs_verrouilles?: string[];
+};
+
+export async function modifierRegles(
+  params: ModifierReglesParams,
+): Promise<{ ok: true; data: ModifierReglesResult } | ModifierReglesError> {
+  const auth = await requestWithAuth('/api/tontine/regles/modifier/', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    const detail = extractErrorDetail(body, 'Impossible de modifier les règles.');
+    const champsVerrouilles =
+      body && typeof body === 'object' && Array.isArray((body as { champs_verrouilles?: unknown }).champs_verrouilles)
+        ? ((body as { champs_verrouilles: string[] }).champs_verrouilles)
+        : undefined;
+    return { ok: false, detail, champs_verrouilles: champsVerrouilles };
+  }
+  return { ok: true, data: body as ModifierReglesResult };
+}
+
+export type Penalite = {
+  id: number;
+  tontine_id: number;
+  user_id: number;
+  type_penalite: 'RETARD PAIEMENT' | 'ABSENCE PAIEMENT';
+  montant_penalite: string;
+  montant_due: string;
+  motif: string;
+  est_reglee: boolean;
+  est_annulee: boolean;
+  date_attribution_penalite: string;
+  date_reglement_penalite: string | null;
+  date_annulation: string | null;
+};
+
+export type PenalitesResponse = {
+  count: number;
+  results: Penalite[];
+  total_impaye: string;
+};
+
+export type PenaliteFilter = 'impayees' | 'reglees' | 'toutes';
+
+export async function fetchPenalites(
+  tontineId: string | number,
+  statut: PenaliteFilter = 'toutes',
+): Promise<{ ok: true; data: PenalitesResponse } | { ok: false; detail: string }> {
+  const params = new URLSearchParams({ tontine_id: String(tontineId), statut });
+  const auth = await requestWithAuth(`/api/tontine/penalites/?${params.toString()}`, {
+    method: 'GET',
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible de charger les pénalités.') };
+  }
+  const data = body as PenalitesResponse;
+  if (!Array.isArray(data?.results)) {
+    return { ok: false, detail: 'Réponse serveur invalide.' };
+  }
+  return { ok: true, data };
+}
+
+export async function attribuerPenalite(params: {
+  tontine_id: number;
+  user_id?: number;
+  numero_telephone?: string;
+  type_penalite: 'RETARD PAIEMENT' | 'ABSENCE PAIEMENT';
+  motif?: string;
+}): Promise<{ ok: true; data: { detail: string; penalite: Penalite } } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth('/api/tontine/penalites/attribuer/', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, 'Impossible d’attribuer cette pénalité.') };
+  }
+  return { ok: true, data: body as { detail: string; penalite: Penalite } };
+}
+
+async function postPenaliteAction(
+  path: string,
+  penaliteId: number,
+  fallback: string,
+): Promise<{ ok: true; data: { detail: string; penalite: Penalite } } | { ok: false; detail: string }> {
+  const auth = await requestWithAuth(path, {
+    method: 'POST',
+    body: JSON.stringify({ penalite_id: penaliteId }),
+  });
+  if (!auth.ok) return auth;
+  const body: unknown = await auth.response.json().catch(() => null);
+  if (!auth.response.ok) {
+    return { ok: false, detail: extractErrorDetail(body, fallback) };
+  }
+  return { ok: true, data: body as { detail: string; penalite: Penalite } };
+}
+
+export function reglerPenalite(penaliteId: number) {
+  return postPenaliteAction(
+    '/api/tontine/penalites/regler/',
+    penaliteId,
+    'Impossible de marquer cette pénalité comme réglée.',
+  );
+}
+
+export function annulerPenalite(penaliteId: number) {
+  return postPenaliteAction(
+    '/api/tontine/penalites/annuler/',
+    penaliteId,
+    'Impossible d’annuler cette pénalité.',
+  );
 }

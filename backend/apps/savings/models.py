@@ -34,6 +34,14 @@ class EpargnePersonnelle(models.Model):
     date_archivage = models.DateTimeField(null=True, blank=True)
     date_suppression = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(montant_courant__gte=0),
+                name="epargnepersonnelle_montant_courant_non_negatif",
+            ),
+        ]
+
 
 
 

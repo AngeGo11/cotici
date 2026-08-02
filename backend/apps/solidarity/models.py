@@ -22,6 +22,12 @@ class Solidarity(Tontine):
     class Meta:
         verbose_name = "Tontine solidaire"
         verbose_name_plural = "Tontines solidaires"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(objectif_cotisation__gt=0),
+                name="solidarity_objectif_cotisation_positif",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         self.type_tontine = Tontine.TYPE_TONTINE.SOLIDAIRE

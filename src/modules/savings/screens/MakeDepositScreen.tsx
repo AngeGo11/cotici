@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { Alert } from 'react-native';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { AnimatedPressable } from '@/shared/ui';
+import { AnimatedPressable, Button } from '@/shared/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -198,29 +198,25 @@ export default function MakeDepositScreen() {
         </View>
 
         {!canPay ? (
-          <AnimatedPressable
-            style={styles.rechargeButton}
+          <Button
+            label="Recharger mon compte"
+            size="lg"
+            leftIcon="plus-circle"
             onPress={() => router.push('/deposit-to-account')}
-          >
-            <Feather name="plus-circle" size={20} color={Colors.white} />
-            <Text style={styles.rechargeButtonText}>Recharger mon compte</Text>
-          </AnimatedPressable>
+            style={styles.rechargeButtonWrap}
+          />
         ) : null}
 
-        <AnimatedPressable
-          style={[styles.confirmButton, !canPay && styles.confirmDisabled]}
-          disabled={!canPay || paying}
+        <Button
+          label="Confirmer la cotisation"
+          size="lg"
+          leftIcon="check-circle"
+          variant={canPay ? 'primary' : 'secondary'}
+          disabled={!canPay}
+          loading={paying}
           onPress={handleConfirm}
-        >
-          {paying ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Feather name="check-circle" size={20} color={canPay ? Colors.white : Colors.gray[400]} />
-          )}
-          <Text style={[styles.confirmText, !canPay && styles.confirmTextDisabled]}>
-            Confirmer la cotisation
-          </Text>
-        </AnimatedPressable>
+          style={styles.confirmButtonWrap}
+        />
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -487,41 +483,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   securityEm: { color: Colors.gray[400], paddingHorizontal: 2 },
-  rechargeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+  rechargeButtonWrap: {
     marginHorizontal: Theme.spacing.page,
     marginBottom: Theme.spacing.md,
-    backgroundColor: Colors.brand,
-    paddingVertical: 18,
-    borderRadius: Theme.radius.md,
-    ...Theme.shadow.soft,
   },
-  rechargeButtonText: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 17,
-    letterSpacing: 0.2,
-    color: Colors.white,
-  },
-  confirmButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+  confirmButtonWrap: {
     marginHorizontal: Theme.spacing.page,
-    backgroundColor: Colors.success,
-    paddingVertical: 18,
-    borderRadius: Theme.radius.md,
-    ...Theme.shadow.soft,
   },
-  confirmDisabled: { backgroundColor: Colors.gray[200], shadowOpacity: 0, elevation: 0 },
-  confirmText: {
-    fontFamily: Fonts.outfit.semiBold,
-    fontSize: 17,
-    letterSpacing: 0.2,
-    color: Colors.white,
-  },
-  confirmTextDisabled: { color: Colors.gray[400] },
 });
