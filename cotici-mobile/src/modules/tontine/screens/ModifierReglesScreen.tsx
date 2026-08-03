@@ -10,6 +10,8 @@ import { Theme } from '@/shared/theme/Theme';
 import { modifierRegles } from '@/shared/api';
 import { useTontineDetail } from '@/modules/tontine/hooks/useTontineDetail';
 
+// Les valeurs doivent correspondre exactement à `TontineRegle.FREQUENCE_COTISATION`
+// (cotici-backend/apps/tontine/models.py) — l'écran les renvoie telles quelles.
 const FREQUENCE_OPTIONS = [
   { value: 'JOURNALIER', label: 'Journalier' },
   { value: 'HEBDOMADAIRE', label: 'Hebdo.' },

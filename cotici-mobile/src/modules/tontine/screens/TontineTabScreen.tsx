@@ -13,6 +13,7 @@ import { Colors, withOpacity } from '@/shared/theme/Colors';
 import { Fonts } from '@/shared/theme/Fonts';
 import { Theme } from '@/shared/theme/Theme';
 import { parseTurn } from '@/shared/api';
+import { echeanceDepassee, formatEcheance, frequenceUnite } from '@/shared/lib';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { fetchRecruitingTontines, fetchMyInvitations, tontineSummaryToUi } from '@/shared/api';
@@ -402,6 +403,11 @@ export default function TontineListScreen() {
           const turnPct = isCompleted ? 100 : pct;
           const turnCurrent = isCompleted ? total : current;
           const membresLabel = `${tontine.members}/${tontine.nombreMax} membres`;
+          // « par mois », « tous les 5 jours »… null si la fréquence est
+          // inconnue ou personnalisée sans nombre de jours.
+          const uniteCotisation = frequenceUnite(tontine.frequence, tontine.frequencePersonnalise);
+          const echeanceTexte = isCompleted ? null : formatEcheance(tontine.echeance);
+          const echeanceEnRetard = echeanceDepassee(tontine.echeance);
 
           return (
             <AnimatedPressable
@@ -454,6 +460,20 @@ export default function TontineListScreen() {
                   <View style={styles.turnTrack}>
                     <View style={[styles.turnFill, { width: `${turnPct}%` }]} />
                   </View>
+                  {echeanceTexte ? (
+                    <View style={styles.echeanceRow}>
+                      <Feather
+                        name="calendar"
+                        size={12}
+                        color={echeanceEnRetard ? Colors.danger : Colors.gray[500]}
+                      />
+                      <Text
+                        style={[styles.echeanceText, echeanceEnRetard && styles.echeanceTextLate]}
+                      >
+                        {echeanceEnRetard ? echeanceTexte : `Échéance : ${echeanceTexte}`}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               )}
 
@@ -462,6 +482,9 @@ export default function TontineListScreen() {
                   <Text style={styles.detailLabel}>Cotisation</Text>
                   <Text style={styles.detailValue}>
                     {tontine.cotisationAmount.toLocaleString('fr-FR')} F
+                    {uniteCotisation ? (
+                      <Text style={styles.detailUnit}> {uniteCotisation}</Text>
+                    ) : null}
                   </Text>
                 </View>
                 <View style={styles.chevronWrap}>
@@ -784,6 +807,10 @@ const styles = StyleSheet.create({
   },
   detailLabel: { fontFamily: Fonts.outfit.regular, fontSize: 11, color: Colors.gray[500], marginBottom: 2 },
   detailValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 16, color: Colors.gray[900] },
+  detailUnit: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  echeanceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  echeanceText: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.gray[600] },
+  echeanceTextLate: { color: Colors.danger },
   chevronWrap: { padding: 4 },
   recruitingCard: {
     borderColor: withOpacity(Colors.accent, 0.35),

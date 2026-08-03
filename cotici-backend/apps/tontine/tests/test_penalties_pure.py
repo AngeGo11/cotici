@@ -64,31 +64,22 @@ class DelaiGraceDeltaTests(SimpleTestCase):
 
 
 class DeadlinePenaliteTests(SimpleTestCase):
-    def test_deadline_uses_tour_echeance_when_later_than_devenu_payeur(self):
-        """Rang 1 : `devenu_payeur_at` == `tour.date` == échéance ici -> deadline
-        = échéance + grâce."""
+    """Paiement libre (décision produit) : la deadline est désormais UNIFORME
+    par tour (échéance + délai de grâce), il n'existe plus de notion de
+    "devenu payeur à" par rang."""
+
+    def test_deadline_uses_tour_echeance(self):
         now = timezone.now()
         regle = _regle(delai_grace_heures=24)
         tour = _tour(date=now, date_echeance=now)
-        deadline = deadline_penalite(regle, tour, devenu_payeur_at=now)
+        deadline = deadline_penalite(regle, tour)
         self.assertEqual(deadline, now + timedelta(hours=24))
-
-    def test_deadline_glissante_uses_devenu_payeur_at_when_later_than_echeance(self):
-        """Rang >1 : le membre précédent paie APRÈS l'échéance du tour -> la
-        deadline glisse sur `devenu_payeur_at`, jamais sur l'échéance figée."""
-        now = timezone.now()
-        echeance = now
-        devenu_payeur_at = now + timedelta(days=3)  # rang précédent payé tardivement
-        regle = _regle(delai_grace_heures=24)
-        tour = _tour(date=now, date_echeance=echeance)
-        deadline = deadline_penalite(regle, tour, devenu_payeur_at=devenu_payeur_at)
-        self.assertEqual(deadline, devenu_payeur_at + timedelta(hours=24))
 
     def test_deadline_falls_back_to_tour_date_if_no_echeance(self):
         now = timezone.now()
         regle = _regle(delai_grace_heures=10)
         tour = _tour(date=now, date_echeance=None)
-        deadline = deadline_penalite(regle, tour, devenu_payeur_at=now)
+        deadline = deadline_penalite(regle, tour)
         self.assertEqual(deadline, now + timedelta(hours=10))
 
 
@@ -97,17 +88,13 @@ class EstEnRetardTests(SimpleTestCase):
         now = timezone.now()
         regle = _regle(delai_grace_heures=24)
         tour = _tour(date=now, date_echeance=now)
-        self.assertFalse(
-            est_en_retard(regle, tour, devenu_payeur_at=now, now=now + timedelta(hours=23))
-        )
+        self.assertFalse(est_en_retard(regle, tour, now=now + timedelta(hours=23)))
 
     def test_late_strictly_after_deadline(self):
         now = timezone.now()
         regle = _regle(delai_grace_heures=24)
         tour = _tour(date=now, date_echeance=now)
-        self.assertTrue(
-            est_en_retard(regle, tour, devenu_payeur_at=now, now=now + timedelta(hours=24, seconds=1))
-        )
+        self.assertTrue(est_en_retard(regle, tour, now=now + timedelta(hours=24, seconds=1)))
 
     def test_exactly_at_deadline_is_not_late(self):
         """`now > deadline` strict : `now == deadline` n'est pas en retard."""
@@ -115,7 +102,7 @@ class EstEnRetardTests(SimpleTestCase):
         regle = _regle(delai_grace_heures=24)
         tour = _tour(date=now, date_echeance=now)
         deadline = now + timedelta(hours=24)
-        self.assertFalse(est_en_retard(regle, tour, devenu_payeur_at=now, now=deadline))
+        self.assertFalse(est_en_retard(regle, tour, now=deadline))
 
 
 class MontantPenalitePourTests(SimpleTestCase):

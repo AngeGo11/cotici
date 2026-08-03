@@ -122,17 +122,20 @@ class PhaseConstatTests(TestCase):
         self.now = timezone.now()
         self.tour = _make_tour(self.tontine, self.host, 1, date_echeance=self.now - timedelta(days=2))
 
-    def test_constate_une_penalite_pour_le_payeur_courant_en_retard(self):
+    def test_constate_une_penalite_pour_chaque_membre_impaye_en_retard(self):
+        """PAIEMENT LIBRE : `host` ET `member2` sont tous deux impayés sur ce
+        tour -> les deux reçoivent une pénalité (fin de la notion de "payeur
+        courant" unique)."""
         _run(phase="constat")
-        self.assertEqual(Penalite.objects.count(), 1)
-        penalite = Penalite.objects.get()
-        self.assertEqual(penalite.user_id, self.host.id)
-        self.assertTrue(penalite.est_automatique)
+        self.assertEqual(Penalite.objects.count(), 2)
+        user_ids = set(Penalite.objects.values_list("user_id", flat=True))
+        self.assertEqual(user_ids, {self.host.id, self.member2.id})
+        self.assertTrue(all(Penalite.objects.values_list("est_automatique", flat=True)))
 
     def test_double_execution_est_idempotente(self):
         _run(phase="constat")
         _run(phase="constat")
-        self.assertEqual(Penalite.objects.count(), 1)
+        self.assertEqual(Penalite.objects.count(), 2)
 
     def test_tontine_non_active_est_gelee(self):
         self.tontine.etat = Tontine.ETAT.ARCHIVE
@@ -143,7 +146,7 @@ class PhaseConstatTests(TestCase):
     def test_dry_run_constat_necrit_rien(self):
         output = _run(phase="constat", dry_run=True)
         self.assertEqual(Penalite.objects.count(), 0)
-        self.assertIn("penalites_estimees=1", output)
+        self.assertIn("penalites_estimees=2", output)
 
     def test_divergence_cache_date_echeance_saute_le_tour(self):
         """Si `tour.date_echeance` a divergé du recalcul `tour_echeance`, le
@@ -165,19 +168,19 @@ class PhaseConstatTests(TestCase):
         tontine2, regle2 = _tontine_avec_regle(host2)
         _make_tour(tontine2, host2, 1, date_echeance=self.now - timedelta(days=2))
         _run(phase="constat", tontine_id=self.tontine.id)
-        self.assertEqual(Penalite.objects.filter(tontine=self.tontine).count(), 1)
+        self.assertEqual(Penalite.objects.filter(tontine=self.tontine).count(), 2)
         self.assertEqual(Penalite.objects.filter(tontine=tontine2).count(), 0)
 
     def test_integrity_error_ne_bloque_pas_le_job(self):
         """Une pénalité qui lève `IntegrityError` (contrainte d'unicité, course
         avec une autre écriture) incrémente le compteur d'erreurs mais ne fait
-        pas planter le job pour les tours suivants."""
+        pas planter le job pour les fautifs/tours suivants."""
         with patch(
             "apps.tontine.management.commands.apply_tontine_penalties.constater_penalite",
             side_effect=IntegrityError("boom"),
         ):
             output = _run(phase="constat")
-        self.assertIn("erreurs=1", output)
+        self.assertIn("erreurs=2", output)
         self.assertEqual(Penalite.objects.count(), 0)
 
 
@@ -326,12 +329,15 @@ class IdempotenceFullRunTests(TestCase):
         JAMAIS être recréée par le job au passage suivant, même si le membre
         est toujours en retard."""
         _run(phase="constat")
-        penalite = Penalite.objects.get(tontine=self.tontine)
+        penalite = Penalite.objects.get(tontine=self.tontine, user=self.host)
         penalite.est_annulee = True
         penalite.date_annulation = timezone.now()
         penalite.save(update_fields=["est_annulee", "date_annulation"])
 
         _run(phase="constat")
-        self.assertEqual(Penalite.objects.filter(tontine=self.tontine).count(), 1)
+        # `host` reste à 1 (annulée, jamais recréée) ; `member2` (toujours
+        # impayé, paiement libre) en porte une seconde -> 2 au total.
+        self.assertEqual(Penalite.objects.filter(tontine=self.tontine).count(), 2)
+        self.assertEqual(Penalite.objects.filter(tontine=self.tontine, user=self.host).count(), 1)
         penalite.refresh_from_db()
         self.assertTrue(penalite.est_annulee)

@@ -20,6 +20,14 @@ export type TontineTour = {
   beneficiaire_id: number;
   montant_depose: string;
   statut_tour: string;
+  /** Ouverture du tour (ISO 8601). */
+  date?: string;
+  /**
+   * Échéance du tour (ISO 8601), dérivée de la fréquence de cotisation côté
+   * backend. `null` quand elle n'est pas calculable (fréquence personnalisée
+   * sans nombre de jours) : toujours gérer l'absence de date.
+   */
+  date_echeance?: string | null;
 };
 
 export type TontineMember = {
@@ -147,6 +155,10 @@ export function tontineSummaryToUi(t: TontineSummary) {
     qrCode: t.qr_code,
     description: t.description,
     tourCourant: t.tour_courant,
+    frequence: t.regles?.frequence ?? null,
+    frequencePersonnalise: t.regles?.frequence_personnalise ?? null,
+    /** Échéance du tour en cours (ISO), null hors cycle ou si non calculable. */
+    echeance: t.tour_courant?.date_echeance ?? null,
   };
 }
 

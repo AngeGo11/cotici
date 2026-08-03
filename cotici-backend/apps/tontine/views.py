@@ -304,6 +304,10 @@ def _serialize_tour(tour: TourTontine) -> dict:
         "montant_depose": str(tour.montant_depose),
         "statut_tour": tour.statut_tour,
         "date": tour.date.isoformat(),
+        # Cache dérivé de la fréquence de cotisation (voir `scheduling.py`).
+        # Null tant qu'il n'est pas calculable (PERSONNALISÉE sans nombre de
+        # jours) : le client doit gérer l'absence de date.
+        "date_echeance": tour.date_echeance.isoformat() if tour.date_echeance else None,
     }
 
 
@@ -863,7 +867,13 @@ def _changer_tour_impl(request):
 
         montant_cloture = _parse_positive_decimal(request.data.get("montant_depose"))
         if montant_cloture is None:
-            montant_cloture = tour_en_cours.montant_depose or _pot_attendu(regle)
+            # BUG CORRIGÉ : l'ancien fallback `tour_en_cours.montant_depose or
+            # _pot_attendu(regle)` versait le pot PLEIN théorique dès que
+            # `montant_depose` valait 0 (aucune cotisation reçue) — une
+            # création de monnaie ex nihilo. Le montant versé au bénéficiaire
+            # DOIT toujours être le montant réellement collecté, jamais un
+            # montant théorique de repli.
+            montant_cloture = tour_en_cours.montant_depose
 
         tour_en_cours.montant_depose = montant_cloture
         tour_en_cours.statut_tour = TourTontine.STATUT_TOUR.TERMINE
@@ -1517,24 +1527,14 @@ def cotiser_tontine(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    next_tm = next_member_to_pay(tontine, tour)
-    if next_tm is None:
-        return Response(
-            {"detail": "Toutes les cotisations de ce tour sont déjà réglées."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if next_tm.membre_id != user.id:
-        name = f"{next_tm.membre.first_name or ''} {next_tm.membre.last_name or ''}".strip()
-        who = name or next_tm.membre.numero_telephone or "un autre membre"
-        return Response(
-            {
-                "detail": (
-                    f"Ce n'est pas encore votre tour. C'est au tour de {who} "
-                    f"(rang {next_tm.ordre_ramassage})."
-                ),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    # PAIEMENT LIBRE (décision produit) : tout membre actif peut cotiser dès
+    # l'ouverture du tour, sans attendre son rang — l'ordre de ramassage ne
+    # désigne plus que le bénéficiaire du tour. Le seul gate de paiement
+    # restant est "je n'ai pas déjà réglé ma cotisation pour ce tour" (déjà
+    # vérifié ci-dessus, et re-vérifié sous verrou plus bas). Si tous les
+    # membres ont déjà cotisé, `user` (qui vient de passer le contrôle
+    # ci-dessus) ne peut de toute façon plus se trouver ici sans avoir déjà
+    # cotisé lui-même — aucun contrôle supplémentaire n'est donc nécessaire.
 
     mode = _resolve_payment_mode(request.data.get("mode_de_paiement"))
     if mode is None:

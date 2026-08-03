@@ -278,6 +278,52 @@ else:
     PENALITES_AUTO_CUTOFF = None
 
 
+# Fuseau horaire "métier" des tontines (échéances, clôtures "23h59", alertes)
+# — DISTINCT de `TIME_ZONE` (toujours "UTC", stockage). Abidjan n'observe pas
+# de changement d'heure (UTC+0 toute l'année) : les deux sont aujourd'hui
+# numériquement identiques, mais cette variable existe pour que le calcul de
+# "23h59 heure locale" (apps/tontine/scheduling.py::cloture_cutoff) reste
+# correct si COTICI ouvrait un jour à des utilisateurs dans un autre fuseau.
+TONTINE_TIMEZONE = os.getenv("TONTINE_TIMEZONE", "Africa/Abidjan")
+
+
+# Celery — clôture automatique des tours de tontine à échéance, alertes et
+# relances de cotisation, recouvrement des dettes/pénalités (voir
+# config/celery.py, apps/tontine/tasks.py, DEPLOYMENT.md).
+#
+# `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` pointent par défaut vers un
+# Redis local (dev) — à surcharger en production (ex : Redis managé). Aucune
+# tâche ne dépend du résultat renvoyé (fire-and-forget, l'état applicatif
+# vit en base via `TourTontine`/`Penalite`/`DetteCotisation`/`JobRun`), mais un
+# backend est configuré pour permettre `task.get()` en tests/diagnostics.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = TONTINE_TIMEZONE
+CELERY_ENABLE_UTC = True
+# Une tâche qui plante ne doit jamais rester "en cours" indéfiniment côté
+# worker (fuite de verrou applicatif `job_lock`, qui lui se relâche à la
+# fermeture de connexion — mais mieux vaut un délai dur en secours) : borne
+# stricte à 10 minutes, largement suffisante pour un lot de clôtures/15 min.
+CELERY_TASK_TIME_LIMIT = 600
+CELERY_TASK_SOFT_TIME_LIMIT = 540
+# Acquitte la tâche APRÈS exécution (et non à sa réception) : un crash worker
+# en cours de traitement doit pouvoir être rejoué par un autre worker plutôt
+# que de perdre silencieusement le lot — sûr ici car chaque tâche est conçue
+# pour être idempotente (job_lock + re-vérification sous verrou DB).
+CELERY_TASK_ACKS_LATE = True
+
+
+# Destination financière des pénalités de retard — point d'extension UNIQUE,
+# voir apps/tontine/services/penalite_destination.py. En cours d'arbitrage
+# métier : NE PAS changer cette valeur sans validation explicite de
+# l'analyste métier ("beneficiaire_tour" = comportement historique, seul
+# implémenté à ce jour).
+PENALITE_DESTINATION_STRATEGY = os.getenv("PENALITE_DESTINATION_STRATEGY", "beneficiaire_tour")
+
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",

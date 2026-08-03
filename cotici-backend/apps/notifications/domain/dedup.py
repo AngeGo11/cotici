@@ -54,6 +54,30 @@ def dedup_penalite_solde_insuffisant(*, penalite_id: int, iso_year: int, iso_wee
     return f"v1:tontine:penalite.impayee:pen={penalite_id}:w={iso_year}-{iso_week:02d}"
 
 
+def dedup_cotisation_relance(*, tour_id: int, user_id: int, numero_relance: int) -> str:
+    """Relance de retard de cotisation (règle 1) : une fois par (tour, user,
+    numéro de relance) — jamais plus de `MAX_RETARD_RELANCES` relances."""
+    return f"v1:tontine:cotisation.relance:tour={tour_id}:user={user_id}:n={numero_relance}"
+
+
+def dedup_pot_partiel_recu(*, tour_id: int) -> str:
+    """Pot partiel versé au bénéficiaire d'un tour clôturé avec impayés — un
+    seul événement par tour (la clôture forcée elle-même est idempotente)."""
+    return f"v1:tontine:pot_partiel:tour={tour_id}"
+
+
+def dedup_dette_cotisation_constatee(*, dette_id: int) -> str:
+    """Constat d'une dette de cotisation manquée — un seul événement par dette
+    (la dette elle-même est unique par (tour, debiteur), voir la contrainte DB)."""
+    return f"v1:tontine:dette.constatee:dette={dette_id}"
+
+
+def dedup_compensation_appliquee(*, tour_id: int, user_id: int) -> str:
+    """Compensation appliquée sur le pot d'un bénéficiaire à la clôture de
+    SON tour — un seul événement par (tour, bénéficiaire)."""
+    return f"v1:tontine:compensation:tour={tour_id}:user={user_id}"
+
+
 def dedup_epargne_palier(*, epargne_id: int, seuil: int) -> str:
     """Palier de progression d'épargne personnelle atteint (50/80/100 %).
 

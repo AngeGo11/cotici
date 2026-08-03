@@ -40,7 +40,7 @@ from apps.notifications.domain.catalog import (
 )
 from apps.notifications.domain.dedup import dedup_penalite_auto, dedup_penalite_solde_insuffisant
 from apps.notifications.services.notification_service import NotificationService
-from apps.tontine.helpers import active_members_ordered, display_name, display_name_user
+from apps.tontine.helpers import display_name, display_name_user
 from apps.tontine.models import Penalite, TourTontine
 from apps.tontine.penalties import (
     est_en_retard,
@@ -49,6 +49,7 @@ from apps.tontine.penalties import (
     plafond_dette_atteint,
     reserve_cotisation,
 )
+from apps.tontine.services.penalite_destination import resoudre_user_id_destinataire_penalite
 from apps.utils.utilitaires import _unique_ref
 from apps.wallet.models import Transaction, Wallet
 
@@ -156,8 +157,12 @@ def _executer_prelevement(
         tour = (
             TourTontine.objects.select_for_update().select_related("tontine").get(pk=penalite.tour_id)
         )
-        # Auto-pénalisation (le bénéficiaire du tour est aussi son propre
-        # payeur en retard, cas courant en rang 1) : `fautif_wallet` et
+        # Destination financière de la pénalité : point d'extension unique
+        # (voir `apps.tontine.services.penalite_destination`), en cours
+        # d'arbitrage métier — défaut historique inchangé (bénéficiaire du
+        # tour). Auto-pénalisation (le destinataire résolu est aussi le
+        # fautif, cas courant en rang 1 ou après clôture avec impayés où le
+        # bénéficiaire est lui-même en retard) : `fautif_wallet` et
         # `benef_wallet` DOIVENT être la MÊME instance Python. Deux
         # `SELECT ... FOR UPDATE` séparés sur la même ligne renverraient deux
         # objets porteurs chacun du solde lu AVANT toute mutation ; la
@@ -166,10 +171,11 @@ def _executer_prelevement(
         # fabrication de monnaie. Réutiliser l'instance déjà verrouillée
         # élimine le problème par construction (une seule lecture, un seul
         # solde, deux mutations appliquées en séquence dessus).
-        if tour.user_id == penalite.user_id:
+        destinataire_id = resoudre_user_id_destinataire_penalite(tour)
+        if destinataire_id == penalite.user_id:
             benef_wallet = fautif_wallet
         else:
-            benef_wallet, _ = Wallet.objects.select_for_update().get_or_create(user_id=tour.user_id)
+            benef_wallet, _ = Wallet.objects.select_for_update().get_or_create(user_id=destinataire_id)
         p = Penalite.objects.select_for_update().select_related("user", "tontine").get(pk=penalite.pk)
 
         if p.est_reglee or p.est_annulee:
@@ -221,10 +227,12 @@ def _executer_prelevement(
                 type_transaction=Transaction.TYPE_TRANSACTION.PENALITE,
             )
 
-            # Le bénéficiaire du tour, jamais la plateforme : norme tontinière
-            # (la pénalité compense la communauté), et capter les pénalités
-            # exposerait COTICI à une requalification réglementaire (frais non
-            # contractualisés). `tour.montant_depose` n'est JAMAIS incrémenté ici
+            # Destinataire résolu ci-dessus via le point d'extension unique
+            # (par défaut le bénéficiaire du tour, jamais la plateforme :
+            # norme tontinière — la pénalité compense la communauté — et
+            # capter les pénalités exposerait COTICI à une requalification
+            # réglementaire si la destination devait un jour changer sans
+            # cadre contractuel). `tour.montant_depose` n'est JAMAIS incrémenté ici
             # : c'est un snapshot strict des cotisations, et le tour est souvent
             # déjà TERMINÉ au moment du recouvrement.
             benef_wallet.solde_courant += montant
@@ -392,12 +400,13 @@ def rembourser_penalite(penalite: Penalite, admin, motif: str) -> None:
             TourTontine.objects.select_for_update().select_related("tontine").get(pk=penalite.tour_id)
         )
         # Même garde qu'`_executer_prelevement` contre le lost update en cas
-        # d'auto-pénalisation (fautif == bénéficiaire du tour) : voir sa
+        # d'auto-pénalisation (fautif == destinataire résolu) : voir sa
         # docstring pour le détail du bug que ceci évite.
-        if tour.user_id == penalite.user_id:
+        destinataire_id = resoudre_user_id_destinataire_penalite(tour)
+        if destinataire_id == penalite.user_id:
             benef_wallet = fautif_wallet
         else:
-            benef_wallet, _ = Wallet.objects.select_for_update().get_or_create(user_id=tour.user_id)
+            benef_wallet, _ = Wallet.objects.select_for_update().get_or_create(user_id=destinataire_id)
         p = (
             Penalite.objects.select_for_update()
             .select_related("tontine", "user")
@@ -481,21 +490,52 @@ def rembourser_penalite(penalite: Penalite, admin, motif: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def total_impaye_membre(tontine_id: int, user_id: int) -> Decimal:
+    """Somme de TOUTES les créances impayées/non annulées d'un membre sur une
+    tontine, tous types confondus : `Σ Penalite.montant_due + Σ
+    DetteCotisation.montant_du` (voir `apps.tontine.penalties.plafond_dette_atteint`,
+    qui exige explicitement cette agrégation combinée depuis l'introduction de
+    `DetteCotisation`)."""
+    from apps.tontine.models import DetteCotisation
+
+    total_penalites = Penalite.objects.filter(
+        tontine_id=tontine_id, user_id=user_id, est_reglee=False, est_annulee=False
+    ).aggregate(total=Sum("montant_due"))["total"] or Decimal("0")
+    total_dettes = DetteCotisation.objects.filter(
+        tontine_id=tontine_id, debiteur_id=user_id, est_reglee=False, est_annulee=False
+    ).aggregate(total=Sum("montant_du"))["total"] or Decimal("0")
+    return total_penalites + total_dettes
+
+
 def constater_penalite(
-    tour: TourTontine, user, regle, *, now: datetime
+    tour: TourTontine, user, regle, *, now: datetime, ignorer_delai_grace: bool = False
 ) -> Optional[Penalite]:
-    """Constate (crée) une pénalité automatique pour le payeur courant de `tour`.
+    """Constate (crée) une pénalité automatique pour `user` sur `tour`.
+
+    PAIEMENT LIBRE (décision produit) : `user` peut être N'IMPORTE QUEL membre
+    actif n'ayant pas cotisé — il n'existe plus de notion de "payeur courant"
+    unique, plusieurs membres peuvent être simultanément en retard sur le
+    même tour (voir `apps.tontine.penalties`, docstring de module).
+
+    `ignorer_delai_grace` : réservé à la clôture forcée à échéance
+    (`apps.tontine.services.cloture_service.cloturer_tour`) — à la clôture,
+    il n'y a plus de "plus tard" pendant lequel le délai de grâce pourrait
+    encore s'écouler : le tour se ferme MAINTENANT, qu'il ait ou non fini de
+    s'écouler. Le job périodique `apply_tontine_penalties` (détection
+    anticipée, avant clôture) continue lui à respecter le délai de grâce.
 
     Retourne `None` sans effet de bord si l'une des conditions suivantes n'est
-    pas réunie : le tour n'est plus EN_COURS, `user` n'est plus (ou pas
-    encore) le payeur courant, le retard n'est pas constitué, les garde-fous
-    d'activation (`apps.tontine.penalties.penalites_auto_actives`) ne sont pas
-    réunis, le plafond de dette de l'utilisateur est atteint, ou une pénalité
-    automatique existe déjà pour ce (tour, user) (idempotence, voir la
-    contrainte `uniq_penalite_auto_par_tour_et_user`).
+    pas réunie : le tour n'est plus EN_COURS, `user` a entre-temps cotisé, le
+    retard n'est pas constitué (sauf `ignorer_delai_grace=True`), les
+    garde-fous d'activation (`apps.tontine.penalties.penalites_auto_actives`)
+    ne sont pas réunis, le plafond de dette COMBINÉ (pénalités + dettes de
+    cotisation) de l'utilisateur est atteint, ou une pénalité automatique
+    existe déjà pour ce (tour, user) (idempotence, voir la contrainte
+    `uniq_penalite_auto_par_tour_et_user`).
 
     Ordre des verrous : TourTontine -> Penalite (sous-ensemble de l'ordre
-    canonique global : aucun wallet n'est touché lors du simple constat).
+    canonique global : aucun wallet n'est touché lors du simple constat —
+    voir Décision produit "pénalité versée au règlement, pas au constat").
     """
     from django.conf import settings
 
@@ -510,40 +550,22 @@ def constater_penalite(
         if tour_locked.statut_tour != TourTontine.STATUT_TOUR.EN_COURS:
             return None
 
-        membres = active_members_ordered(tour_locked.tontine)
-        debit_dates = dict(
-            Transaction.objects.filter(
-                tour=tour_locked,
-                tontine=tour_locked.tontine,
-                type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
-                statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-            ).values_list("wallet__user_id", "date_transaction")
-        )
-
-        payeur_courant = None
-        devenu_payeur_at = tour_locked.date
-        for index, tm in enumerate(membres):
-            if tm.membre_id in debit_dates:
-                continue
-            payeur_courant = tm
-            if index > 0:
-                precedent = membres[index - 1]
-                devenu_payeur_at = debit_dates.get(precedent.membre_id, tour_locked.date)
-            break
-
-        if payeur_courant is None or payeur_courant.membre_id != user.id:
-            # Ce n'est plus (ou pas encore) le payeur courant : quelqu'un a
-            # cotisé entre le moment où le job a listé les candidats et
-            # l'acquisition du verrou, ou `user` n'a jamais été le payeur
-            # courant (appel erroné) — rien à constater.
+        deja_cotise = Transaction.objects.filter(
+            tour=tour_locked,
+            tontine=tour_locked.tontine,
+            wallet__user_id=user.id,
+            type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
+            statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
+        ).exists()
+        if deja_cotise:
+            # A cotisé entre le moment où l'appelant a listé les candidats et
+            # l'acquisition du verrou — rien à constater.
             return None
 
-        if not est_en_retard(regle, tour_locked, devenu_payeur_at, now):
+        if not ignorer_delai_grace and not est_en_retard(regle, tour_locked, now):
             return None
 
-        total_impaye = Penalite.objects.filter(
-            tontine_id=tour_locked.tontine_id, user=user, est_reglee=False, est_annulee=False
-        ).aggregate(total=Sum("montant_due"))["total"] or Decimal("0")
+        total_impaye = total_impaye_membre(tour_locked.tontine_id, user.id)
         if plafond_dette_atteint(regle, total_impaye):
             # Escalade humaine : pas de nouvelle pénalité auto tant qu'un admin
             # n'a pas régularisé. Notification non-idempotente assumée (pas de

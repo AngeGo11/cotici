@@ -137,8 +137,17 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
 
     def _phase_constat(self, tontine_id, limit: int) -> dict:
+        """PAIEMENT LIBRE : constate une pénalité pour CHAQUE membre actif en
+        retard sur un tour (et non plus uniquement le "payeur courant" — cette
+        notion a disparu avec l'abandon du séquencement des cotisations). Ce
+        constat anticipé (avant la clôture forcée à échéance, voir
+        `apps.tontine.services.cloture_service`) reste soumis au délai de
+        grâce ; `cloturer_tour` constate lui aussi les retardataires, sans
+        délai de grâce (la clôture est un couperet), via
+        `constater_penalite(..., ignorer_delai_grace=True)` — les deux
+        chemins sont idempotents entre eux (contrainte DB
+        `uniq_penalite_auto_par_tour_et_user`)."""
         now = timezone.now()
-        cutoff = getattr(settings, "PENALITES_AUTO_CUTOFF", None)
         created = 0
         skipped_divergence = 0
         errors = 0
@@ -165,22 +174,17 @@ class Command(BaseCommand):
                     statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
                 ).values_list("wallet__user_id", flat=True)
             )
-            payeur_courant = next(
-                (tm for tm in membres if tm.membre_id not in debit_ids), None
-            )
-            if payeur_courant is None:
-                continue
+            fautifs = [tm for tm in membres if tm.membre_id not in debit_ids]
 
-            try:
-                penalite = constater_penalite(
-                    tour, payeur_courant.membre, regle, now=now
-                )
-            except IntegrityError:
-                errors += 1
-                continue
+            for fautif in fautifs:
+                try:
+                    penalite = constater_penalite(tour, fautif.membre, regle, now=now)
+                except IntegrityError:
+                    errors += 1
+                    continue
 
-            if penalite is not None:
-                created += 1
+                if penalite is not None:
+                    created += 1
 
         return {
             "tours_examines": traites,
@@ -289,36 +293,25 @@ class Command(BaseCommand):
                 skipped_divergence += 1
                 continue
 
+            if not est_en_retard(regle, tour, now):
+                continue
+
             membres = active_members_ordered(tour.tontine)
-            debit_dates = dict(
+            debit_ids = set(
                 Transaction.objects.filter(
                     tour=tour,
                     tontine=tour.tontine,
                     type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
                     statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-                ).values_list("wallet__user_id", "date_transaction")
+                ).values_list("wallet__user_id", flat=True)
             )
-            payeur_courant = None
-            devenu_payeur_at = tour.date
-            for index, tm in enumerate(membres):
-                if tm.membre_id in debit_dates:
-                    continue
-                payeur_courant = tm
-                if index > 0:
-                    devenu_payeur_at = debit_dates.get(
-                        membres[index - 1].membre_id, tour.date
-                    )
-                break
-            if payeur_courant is None:
-                continue
-            if not est_en_retard(regle, tour, devenu_payeur_at, now):
-                continue
-            already = Penalite.objects.filter(
-                tour=tour, user_id=payeur_courant.membre_id, est_automatique=True
-            ).exists()
-            if already:
-                continue
-            estimees += 1
+            fautifs = [tm for tm in membres if tm.membre_id not in debit_ids]
+            deja_constates = set(
+                Penalite.objects.filter(
+                    tour=tour, est_automatique=True, user_id__in=[tm.membre_id for tm in fautifs]
+                ).values_list("user_id", flat=True)
+            )
+            estimees += sum(1 for tm in fautifs if tm.membre_id not in deja_constates)
 
         return {
             "tours_examines": traites,

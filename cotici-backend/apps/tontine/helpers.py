@@ -221,7 +221,15 @@ def member_user_ids_paid_for_tour(tontine: Tontine, tour: TourTontine) -> set:
 
 
 def next_member_to_pay(tontine: Tontine, tour: TourTontine) -> Optional[TontineMembre]:
-    """Prochain membre qui doit cotiser pour ce tour (ordre de ramassage croissant)."""
+    """Prochain membre (ordre de ramassage croissant) qui n'a pas encore cotisé.
+
+    USAGE DÉSORMAIS PUREMENT INFORMATIF (affichage "qui reste à payer, dans
+    quel ordre"), PLUS un gate de paiement : depuis l'abandon du séquencement
+    (paiement libre — tout membre actif peut cotiser dès l'ouverture du tour,
+    sans attendre son rang), `cotiser_tontine` n'appelle plus cette fonction
+    pour bloquer un paiement hors rang. `ordre_ramassage` ne sert plus qu'à
+    désigner le bénéficiaire du tour, jamais à séquencer les cotisations.
+    """
     paid_ids = member_user_ids_paid_for_tour(tontine, tour)
     for tm in active_members_ordered(tontine):
         if tm.membre_id not in paid_ids:
@@ -229,36 +237,22 @@ def next_member_to_pay(tontine: Tontine, tour: TourTontine) -> Optional[TontineM
     return None
 
 
-def _devenu_payeur_at(tour: TourTontine, membres_ordonnes: list, payeur_courant_id: int):
-    """Date à laquelle `payeur_courant_id` est structurellement devenu payeur de `tour`.
+def members_en_retard(tontine: Tontine, tour: TourTontine, regle: TontineRegle, now) -> set:
+    """Ensemble des `user_id` en retard sur `tour` (paiement libre, deadline UNIFORME).
 
-    Voir `apps.tontine.penalties` (docstring de module) pour la définition
-    complète de la deadline glissante. Effectue au plus UNE requête (date du
-    débit du membre de rang immédiatement inférieur), appelée une seule fois
-    par rendu de détail (uniquement pour le payeur courant), jamais en boucle
-    sur tous les membres.
+    Remplace l'ancienne notion de "payeur courant" unique : depuis l'abandon
+    du séquencement, PLUSIEURS membres peuvent être simultanément en retard
+    sur le même tour. Un membre est en retard si (a) il n'a pas cotisé et (b)
+    la deadline uniforme du tour (`apps.tontine.penalties.deadline_penalite`)
+    est dépassée.
     """
-    from apps.wallet.models import Transaction
+    from apps.tontine.penalties import est_en_retard
 
-    for index, tm in enumerate(membres_ordonnes):
-        if tm.membre_id != payeur_courant_id:
-            continue
-        if index == 0:
-            return tour.date
-        precedent = membres_ordonnes[index - 1]
-        debit_at = (
-            Transaction.objects.filter(
-                tour=tour,
-                tontine=tour.tontine,
-                wallet__user_id=precedent.membre_id,
-                type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
-                statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-            )
-            .values_list("date_transaction", flat=True)
-            .first()
-        )
-        return debit_at or tour.date
-    return tour.date
+    if not est_en_retard(regle, tour, now):
+        return set()
+    paid_ids = member_user_ids_paid_for_tour(tontine, tour)
+    membres = active_members_ordered(tontine)
+    return {tm.membre_id for tm in membres if tm.membre_id not in paid_ids}
 
 
 def penalites_impayees_par_membre(tontine: Tontine) -> dict:
@@ -281,6 +275,30 @@ def penalites_impayees_par_membre(tontine: Tontine) -> dict:
     return {row["user_id"]: {"impayee": row["total"] or Decimal("0"), "count": row["count"]} for row in rows}
 
 
+def dettes_cotisation_impayees_par_membre(tontine: Tontine) -> dict:
+    """Agrégat `{debiteur_id: {"impayee": Decimal, "count": int}}` des dettes de
+    cotisation manquée impayées (ni réglées, ni annulées) d'une tontine.
+
+    Distinct de `penalites_impayees_par_membre` (nature comptable différente,
+    voir la docstring de `apps.tontine.models.DetteCotisation`) : c'est
+    généralement le montant le plus significatif pour un utilisateur, la
+    cotisation manquée étant en pratique bien supérieure à la pénalité.
+    """
+    from django.db.models import Count, Sum
+
+    from apps.tontine.models import DetteCotisation
+
+    rows = (
+        DetteCotisation.objects.filter(tontine=tontine, est_reglee=False, est_annulee=False)
+        .values("debiteur_id")
+        .annotate(total=Sum("montant_du"), count=Count("id"))
+    )
+    return {
+        row["debiteur_id"]: {"impayee": row["total"] or Decimal("0"), "count": row["count"]}
+        for row in rows
+    }
+
+
 def serialize_member(
     tm: TontineMembre,
     tour: Optional[TourTontine],
@@ -288,20 +306,22 @@ def serialize_member(
     tontine: Optional[Tontine] = None,
     *,
     penalites_agg: Optional[dict] = None,
+    dettes_agg: Optional[dict] = None,
     phase: Optional[str] = None,
     membres_ordonnes: Optional[list] = None,
     paid_ids: Optional[set] = None,
     next_user_id: Optional[int] = None,
+    en_retard_ids: Optional[set] = None,
 ) -> dict:
-    """`phase`, `membres_ordonnes`, `paid_ids`, `next_user_id` sont des caches
-    OPTIONNELS destinés à être calculés UNE FOIS par `serialize_tontine_detail`
-    pour toute la liste des membres, puis réinjectés ici (même pattern que
-    `penalites_agg`) : sans eux, chaque appel recalcule `compute_phase`,
-    `member_user_ids_paid_for_tour` et `next_member_to_pay` (qui refait lui-même
-    ces deux requêtes) — un N+1 sévère (~9 requêtes/membre mesurées) pour une
-    liste de membres censée coûter une poignée de requêtes au total. Quand ils
-    ne sont pas fournis (appelant isolé, ex. tests unitaires), le comportement
-    de repli reproduit fidèlement l'ancien calcul, requête par requête."""
+    """`phase`, `membres_ordonnes`, `paid_ids`, `next_user_id`, `en_retard_ids`
+    sont des caches OPTIONNELS destinés à être calculés UNE FOIS par
+    `serialize_tontine_detail` pour toute la liste des membres, puis
+    réinjectés ici (même pattern que `penalites_agg`) : sans eux, chaque appel
+    recalcule `compute_phase` et `member_user_ids_paid_for_tour` — un N+1
+    sévère pour une liste de membres censée coûter une poignée de requêtes au
+    total. Quand ils ne sont pas fournis (appelant isolé, ex. tests
+    unitaires), le comportement de repli reproduit fidèlement le calcul,
+    requête par requête."""
     user = tm.membre
     initials = ""
     if user.first_name:
@@ -316,7 +336,11 @@ def serialize_member(
     if phase is None and tontine and regle:
         phase = compute_phase(tontine, regle)
 
-    # Badges : cotisations une par une, dans l'ordre de ramassage.
+    # Badges : PAIEMENT LIBRE — tout membre actif peut cotiser dès l'ouverture
+    # du tour (l'ordre de ramassage ne désigne plus que le bénéficiaire).
+    # Plusieurs membres peuvent donc être simultanément "en retard" (deadline
+    # UNIFORME par tour, voir `apps.tontine.penalties.deadline_penalite`) —
+    # ceci remplace l'ancien modèle à "payeur courant" unique.
     status = "none"
     en_retard = False
     if tontine and regle and phase == "active" and tour is not None:
@@ -324,28 +348,18 @@ def serialize_member(
             paid_ids = member_user_ids_paid_for_tour(tontine, tour)
         paid = user.id in paid_ids
 
-        if next_user_id is None:
-            next_tm = next_member_to_pay(tontine, tour)
-            next_user_id = next_tm.membre_id if next_tm else None
-
         if paid:
             status = "beneficiary" if tour.user_id == user.id else "paid"
-        elif user.id == next_user_id:
-            # Seul le payeur courant est pénalisable (deadline glissante, voir
-            # `apps.tontine.penalties`) : c'est le seul membre pour lequel un
-            # statut "late" a un sens.
-            from apps.tontine.penalties import est_en_retard
-            from django.utils import timezone
-
-            if membres_ordonnes is None:
-                membres_ordonnes = active_members_ordered(tontine)
-            devenu_payeur_at = _devenu_payeur_at(tour, membres_ordonnes, user.id)
-            en_retard = est_en_retard(regle, tour, devenu_payeur_at, timezone.now())
-            status = "late" if en_retard else "awaiting_payment"
         else:
-            status = "waiting_turn"
+            if en_retard_ids is None:
+                from django.utils import timezone
+
+                en_retard_ids = members_en_retard(tontine, tour, regle, timezone.now())
+            en_retard = user.id in en_retard_ids
+            status = "late" if en_retard else "awaiting_payment"
 
     agg = (penalites_agg or {}).get(user.id, {"impayee": Decimal("0"), "count": 0})
+    dette_agg = (dettes_agg or {}).get(user.id, {"impayee": Decimal("0"), "count": 0})
 
     return {
         "id": str(tm.id),
@@ -359,6 +373,11 @@ def serialize_member(
         "turn": tm.ordre_ramassage,
         "penalite_impayee": str(agg["impayee"]),
         "penalites_count": agg["count"],
+        # Dette de cotisation manquée (distincte de la pénalité, voir
+        # `apps.tontine.models.DetteCotisation`) — généralement le montant le
+        # plus significatif pour l'utilisateur.
+        "dette_cotisation_impayee": str(dette_agg["impayee"]),
+        "dettes_cotisation_count": dette_agg["count"],
         "en_retard": en_retard,
     }
 
@@ -442,6 +461,11 @@ def serialize_tour_brief(tour: TourTontine) -> dict:
         "beneficiaire_id": tour.user_id,
         "montant_depose": str(tour.montant_depose),
         "statut_tour": tour.statut_tour,
+        "date": tour.date.isoformat(),
+        # Cache dérivé de la fréquence de cotisation (voir `scheduling.py`).
+        # Null tant qu'il n'est pas calculable (PERSONNALISÉE sans nombre de
+        # jours) : le client doit gérer l'absence de date.
+        "date_echeance": tour.date_echeance.isoformat() if tour.date_echeance else None,
     }
 
 
@@ -457,21 +481,26 @@ def serialize_tontine_detail(tontine: Tontine, regle: Optional[TontineRegle], fo
         .order_by("ordre_ramassage", "date_adhesion")
     )
     # Tout ce qui suit est calculé UNE fois pour la liste entière (jamais par
-    # membre) : `penalites_agg` (déjà le cas), `phase` (réutilise celle déjà
-    # calculée par `serialize_tontine_summary`), `paid_ids` et `next_user_id`
-    # (dérivé en Python de `paid_ids` + `membres_ordonnes`, sans requête
-    # supplémentaire) — voir la docstring de `serialize_member` pour le détail
-    # du N+1 que ce cache élimine.
+    # membre) : `penalites_agg`/`dettes_agg` (déjà le cas), `phase` (réutilise
+    # celle déjà calculée par `serialize_tontine_summary`), `paid_ids` et
+    # `en_retard_ids` (dérivés en Python, sans requête supplémentaire par
+    # membre) — voir la docstring de `serialize_member` pour le détail du N+1
+    # que ce cache élimine.
     penalites_agg = penalites_impayees_par_membre(tontine)
+    dettes_agg = dettes_cotisation_impayees_par_membre(tontine)
     phase = data["phase"]
     paid_ids = None
     next_user_id = None
+    en_retard_ids: set = set()
     if phase == "active" and tour is not None:
+        from django.utils import timezone
+
         paid_ids = member_user_ids_paid_for_tour(tontine, tour)
         for tm in membres_ordonnes:
             if tm.membre_id not in paid_ids:
                 next_user_id = tm.membre_id
                 break
+        en_retard_ids = members_en_retard(tontine, tour, regle, timezone.now())
     data["membres"] = [
         serialize_member(
             tm,
@@ -479,10 +508,12 @@ def serialize_tontine_detail(tontine: Tontine, regle: Optional[TontineRegle], fo
             regle,
             tontine,
             penalites_agg=penalites_agg,
+            dettes_agg=dettes_agg,
             phase=phase,
             membres_ordonnes=membres_ordonnes,
             paid_ids=paid_ids,
             next_user_id=next_user_id,
+            en_retard_ids=en_retard_ids,
         )
         for tm in membres_ordonnes
     ]
@@ -493,10 +524,14 @@ def serialize_tontine_detail(tontine: Tontine, regle: Optional[TontineRegle], fo
         data["pot_collecte"] = "0"
 
     total_impayees = sum((v["impayee"] for v in penalites_agg.values()), Decimal("0"))
+    total_dettes = sum((v["impayee"] for v in dettes_agg.values()), Decimal("0"))
     data["total_penalites_impayees"] = str(total_impayees)
+    data["total_dettes_cotisation_impayees"] = str(total_dettes)
     for_user_id = getattr(for_user, "id", None)
     ma_penalite = penalites_agg.get(for_user_id, {"impayee": Decimal("0")})
+    ma_dette = dettes_agg.get(for_user_id, {"impayee": Decimal("0")})
     data["ma_penalite_impayee"] = str(ma_penalite["impayee"])
+    data["ma_dette_cotisation_impayee"] = str(ma_dette["impayee"])
     return data
 
 

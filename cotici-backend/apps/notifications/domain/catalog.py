@@ -106,21 +106,61 @@ def spec_cotisation_jour_j(
 
 
 def spec_cotisation_retard(
-    tontine_nom: str, tontine_id: int, tour_num: int
+    tontine_nom: str, tontine_id: int, tour_num: int, montant_penalite: Optional[Decimal] = None
 ) -> NotificationSpec:
     """Alerte de retard de cotisation.
 
-    Formulation volontairement non punitive : les `Penalite` sont créées
-    manuellement par un administrateur (jamais automatiquement), donc ce
-    texte ne promet ni date ni montant de pénalité — décision produit.
+    Mentionne EXPLICITEMENT le risque de pénalité (règle 1 : chaque relance
+    doit citer ce risque) — avec le montant exact de la pénalité applicable
+    quand il est connu, plutôt qu'une formule vague.
     """
+    if montant_penalite:
+        risque = (
+            f"Une pénalité de {montant_penalite} F pourra être appliquée si le "
+            "retard persiste."
+        )
+    else:
+        risque = "Un retard peut entraîner une pénalité selon le règlement de la tontine."
     return NotificationSpec(
         category="cotisation",
         objet="Cotisation en retard",
         contenu=(
             f"Votre paiement pour la tontine « {tontine_nom} » (tour {tour_num}) "
-            "n'a pas encore été reçu. Un retard peut entraîner une pénalité "
-            "selon le règlement de la tontine."
+            f"n'a pas encore été reçu. {risque}"
+        ),
+        source_type="tontine",
+        source_id=tontine_id,
+    )
+
+
+def spec_cotisation_relance(
+    tontine_nom: str,
+    tontine_id: int,
+    tour_num: int,
+    numero_relance: int,
+    montant_penalite: Optional[Decimal] = None,
+) -> NotificationSpec:
+    """Relance de retard de cotisation (règle 1 — cycles/alertes/relances).
+
+    Chaque relance (au plus `apps.tontine.scheduling.MAX_RETARD_RELANCES`)
+    DOIT mentionner explicitement le risque de pénalité de retard : c'est le
+    cœur de cette spec, distincte de `spec_cotisation_retard` (alerte
+    ponctuelle) par son numéro d'ordre et son ton plus insistant à
+    l'approche de la clôture.
+    """
+    if montant_penalite:
+        risque = (
+            f"Passé ce délai, une pénalité de {montant_penalite} F sera "
+            "constatée à la clôture du tour."
+        )
+    else:
+        risque = "Passé ce délai, une pénalité pourra être constatée à la clôture du tour."
+    return NotificationSpec(
+        category="cotisation",
+        objet=f"Relance {numero_relance} : cotisation toujours en retard",
+        contenu=(
+            f"Rappel ({numero_relance}) : votre cotisation pour le tour {tour_num} de "
+            f"la tontine « {tontine_nom} » est toujours en attente. {risque}"
         ),
         source_type="tontine",
         source_id=tontine_id,
@@ -309,6 +349,76 @@ def spec_penalite_plafond_atteint(
             f"({total_impaye} F) dans le groupe « {tontine_nom} ». Le constat automatique "
             "de nouvelles pénalités est suspendu pour ce membre : une intervention "
             "manuelle est nécessaire."
+        ),
+        source_type="tontine",
+        source_id=tontine_id,
+    )
+
+
+def spec_pot_partiel_recu(
+    tontine_nom: str, tontine_id: int, tour_num: int, montant_verse: Decimal, montant_attendu: Decimal
+) -> NotificationSpec:
+    """Notifie le bénéficiaire d'un tour clôturé AVEC IMPAYÉS qu'il a reçu un
+    POT PARTIEL (montant réellement collecté, jamais bloqué par les impayés)."""
+    return NotificationSpec(
+        category="cotisation",
+        objet="Pot partiel reçu",
+        contenu=(
+            f"Votre tour ({tour_num}) dans la tontine « {tontine_nom} » a été "
+            f"clôturé avec des impayés. Vous avez reçu {montant_verse} F sur "
+            f"{montant_attendu} F attendus. Les membres en retard restent "
+            "redevables : vous serez crédité automatiquement à leur règlement."
+        ),
+        source_type="tontine",
+        source_id=tontine_id,
+    )
+
+
+def spec_dette_cotisation_constatee(
+    tontine_nom: str, tontine_id: int, tour_num: int, montant: Decimal
+) -> NotificationSpec:
+    """Notifie un membre qu'une dette de cotisation manquée (distincte d'une
+    pénalité) vient de lui être constatée à la clôture forcée d'un tour."""
+    return NotificationSpec(
+        category="cotisation",
+        objet="Cotisation manquée constatée",
+        contenu=(
+            f"Le tour {tour_num} de la tontine « {tontine_nom} » a été clôturé "
+            f"sans que vous ayez cotisé. Une dette de {montant} F reste à "
+            "régler au bénéficiaire concerné."
+        ),
+        source_type="tontine",
+        source_id=tontine_id,
+    )
+
+
+def spec_dette_cotisation_reglee(tontine_nom: str, tontine_id: int, montant: Decimal) -> NotificationSpec:
+    """Notifie un débiteur que sa dette de cotisation manquée a été réglée."""
+    return NotificationSpec(
+        category="cotisation",
+        objet="Dette de cotisation réglée",
+        contenu=(
+            f"Votre dette de cotisation manquée de {montant} F dans le groupe "
+            f"« {tontine_nom} » a été réglée."
+        ),
+        source_type="tontine",
+        source_id=tontine_id,
+    )
+
+
+def spec_compensation_appliquee(
+    tontine_nom: str, tontine_id: int, tour_num: int, montant_compense: Decimal
+) -> NotificationSpec:
+    """Notifie un bénéficiaire que ses propres créances impayées (dettes de
+    cotisation et/ou pénalités antérieures) ont été automatiquement
+    compensées sur le pot de son propre tour, avant versement du solde net."""
+    return NotificationSpec(
+        category="cotisation",
+        objet="Compensation appliquée sur votre versement",
+        contenu=(
+            f"{montant_compense} F de vos dettes/pénalités en cours ont été "
+            f"automatiquement compensés sur le pot de votre tour ({tour_num}) "
+            f"dans la tontine « {tontine_nom} », avant versement du solde net."
         ),
         source_type="tontine",
         source_id=tontine_id,

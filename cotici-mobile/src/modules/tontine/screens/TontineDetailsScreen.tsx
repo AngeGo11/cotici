@@ -20,6 +20,7 @@ import { useAuth } from '@/shared/auth';
 import { ORDRE_LOCK_MESSAGE, ORDRE_RANDOM_EXPLANATION } from '@/modules/tontine/utils/ordreRamassage';
 import { useTontineDetail } from '@/modules/tontine/hooks/useTontineDetail';
 import type { TontineMember } from '@/shared/api';
+import { echeanceDepassee, formatEcheance, frequenceLabel } from '@/shared/lib';
 
 function memberBadgeConfig(
   status: TontineMember['status'],
@@ -135,6 +136,17 @@ export default function TontineDetailsScreen() {
 
   const benefName = beneficiaryMember?.name ?? 'le bénéficiaire';
   const isLastTour = currentTour >= totalTours;
+
+  // Fréquence de cotisation et échéance du tour en cours. Les deux peuvent
+  // manquer : pas encore de règles définies, ou fréquence personnalisée sans
+  // nombre de jours (le backend laisse alors `date_echeance` à null).
+  const regles = detail.regles;
+  const frequenceTexte = regles
+    ? frequenceLabel(regles.frequence, regles.frequence_personnalise, '')
+    : '';
+  const echeanceIso = hasTour ? detail.tour_courant?.date_echeance : null;
+  const echeanceTexte = formatEcheance(echeanceIso);
+  const echeanceEnRetard = echeanceDepassee(echeanceIso);
 
   const handleCloseTour = () => setCloseSheetOpen(true);
   const handleStartTour = () => setStartSheetOpen(true);
@@ -368,6 +380,30 @@ export default function TontineDetailsScreen() {
                 Mise : {cotisationAmount.toLocaleString('fr-FR')} FCFA / membre · {nombreMax} tours
                 (1 cycle)
               </Text>
+            ) : null}
+            {frequenceTexte || echeanceTexte ? (
+              <View style={styles.rythmeRow}>
+                {frequenceTexte ? (
+                  <View style={styles.rythmeItem}>
+                    <Feather name="repeat" size={13} color={Colors.gray[500]} />
+                    <Text style={styles.rythmeText}>
+                      Cotisation {frequenceTexte.toLowerCase()}
+                    </Text>
+                  </View>
+                ) : null}
+                {echeanceTexte ? (
+                  <View style={styles.rythmeItem}>
+                    <Feather
+                      name="calendar"
+                      size={13}
+                      color={echeanceEnRetard ? Colors.danger : Colors.gray[500]}
+                    />
+                    <Text style={[styles.rythmeText, echeanceEnRetard && styles.rythmeTextLate]}>
+                      {echeanceEnRetard ? echeanceTexte : `Échéance : ${echeanceTexte}`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -739,6 +775,20 @@ const styles = StyleSheet.create({
     color: Colors.gray[500],
     marginTop: 8,
   },
+  rythmeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 10,
+  },
+  rythmeItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  rythmeText: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 13,
+    color: Colors.gray[600],
+  },
+  rythmeTextLate: { color: Colors.danger },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -8,4 +8,10 @@ requests>=2.32.0
 pyotp
 qrcode[pil]
 
+# Clôture automatique des tours de tontine à échéance, alertes/relances de
+# cotisation, recouvrement des dettes/pénalités (voir config/celery.py,
+# apps/tontine/tasks.py, DEPLOYMENT.md).
+celery>=5.3,<6
+redis>=5.0,<6
+
 

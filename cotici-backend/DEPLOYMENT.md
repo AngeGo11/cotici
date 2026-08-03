@@ -1,12 +1,20 @@
-# Déploiement — jobs planifiés (notifications & push)
+# Déploiement — jobs planifiés (notifications, push & clôture de tontines)
 
-Ce projet n'a aucun orchestrateur (pas de Celery/Redis/beat). Les jobs
-périodiques liés aux notifications et au push Expo sont de simples
-`management commands` Django, à planifier via **cron système** sur le
-serveur applicatif (ou tout scheduler équivalent : systemd timers, cron job
-Kubernetes, etc.).
+Deux mécanismes de planification coexistent désormais :
 
-Toutes ces commandes sont :
+1. **`management commands` + cron système** (historique) : toujours utilisé
+   pour les notifications/push Expo ci-dessous. Aucune dépendance à un
+   broker.
+2. **Celery + Redis (beat)** (nouveau, voir `config/celery.py`,
+   `apps/tontine/tasks.py`) : utilisé pour la clôture automatique des tours
+   de tontine à échéance, les alertes/relances de cotisation, et le
+   recouvrement des dettes/pénalités. Chaque tâche Celery reste toutefois un
+   WRAPPER MINCE au-dessus d'un service Django pur (`apps/tontine/services/`)
+   et possède un équivalent `management command` (voir
+   `apps/tontine/management/commands/cloturer_tours_echeance.py`) permettant
+   de se passer entièrement de Celery/Redis si besoin (cron classique).
+
+Toutes ces commandes/tâches sont :
 - **idempotentes** (via `dedup_key` sur `Notifications`, ou re-sélection par
   statut/`next_attempt_at` pour l'outbox) : un ré-appel rapproché ou un
   chevauchement de deux exécutions ne crée jamais de doublon visible ;
@@ -85,6 +93,64 @@ Une fois ces conditions réunies, le prochain passage horaire du job constate
 pénalités du payeur courant en retard sur chaque tour éligible. Utiliser
 `python manage.py apply_tontine_penalties --dry-run [--tontine-id N]` pour
 chiffrer l'impact avant d'activer une tontine à fort volume.
+
+## Clôture automatique des tours de tontine (Celery)
+
+Règle produit : chaque tour se clôture FORCÉMENT à échéance ("23h59" heure
+locale, voir `apps.tontine.scheduling.cloture_cutoff`), qu'il y ait ou non
+des impayés (inverse le comportement historique bloquant de
+`_changer_tour_impl`). Le bénéficiaire reçoit alors un POT PARTIEL (le
+montant réellement collecté) sans jamais attendre les retardataires ; ceux-ci
+portent une `DetteCotisation` (cotisation manquée, créancier = bénéficiaire
+lésé du tour) et, si les garde-fous d'activation existants sont réunis, une
+`Penalite` — constatée à la clôture mais créditée seulement à son règlement
+effectif (décision produit : éviter de rémunérer trois fois le bénéficiaire
+pour un même retard).
+
+### Démarrage de Celery
+
+```bash
+# Worker (traite les tâches)
+celery -A config worker -l info
+
+# Beat (planifie les tâches périodiques, voir config/celery.py::beat_schedule)
+celery -A config beat -l info
+```
+
+Nécessite un Redis accessible (broker + result backend, voir
+`CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` dans `config/settings.py`) :
+
+```bash
+REDIS_URL=redis://localhost:6379  # ou service managé en production
+```
+
+### Variables d'environnement propres à Celery/tontine
+
+- `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` (défaut : Redis local
+  `redis://localhost:6379/0` et `/1`).
+- `TONTINE_TIMEZONE` (défaut `Africa/Abidjan`) : fuseau horaire utilisé pour
+  calculer l'instant exact "23h59" de clôture (`apps.tontine.scheduling.cloture_cutoff`) —
+  distinct de `TIME_ZONE` (toujours `UTC`, stockage).
+- `PENALITE_DESTINATION_STRATEGY` (défaut `beneficiaire_tour`, SEULE valeur
+  implémentée à ce jour) : point d'extension unique pour la destination
+  financière d'une pénalité (voir `apps/tontine/services/penalite_destination.py`).
+  **En cours d'arbitrage métier** — ne pas changer sans validation explicite.
+
+### Repli sans Celery/Redis (cron pur)
+
+Si Celery/Redis ne sont pas déployés, `apps/tontine/management/commands/cloturer_tours_echeance.py`
+appelle EXACTEMENT le même service, protégé par le même `job_lock` :
+
+```cron
+*/15 * * * * cd /path/to/backend && .venv/bin/python manage.py cloturer_tours_echeance >> /var/log/cotici/cloturer_tours_echeance.log 2>&1
+```
+
+Les alertes/relances de cotisation et le recouvrement des créances n'ont, à
+ce stade, PAS d'équivalent `management command` dédié (seulement les tâches
+Celery `apps.tontine.tasks.tache_alertes_cotisation` /
+`tache_relances_cotisation` / `tache_recouvrement_creances`) — à ajouter si
+Celery ne devait finalement pas être retenu en production (même pattern que
+`cloturer_tours_echeance.py`, quelques lignes).
 
 ## Réparation ponctuelle
 

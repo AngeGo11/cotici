@@ -62,6 +62,14 @@ class Transaction(models.Model):
         # (appelé par `save()`) fait échouer TOUTE tentative de sauvegarde de ce type.
         PENALITE = "PENALITE", _("Pénalité de retard")
         VERSEMENT_PENALITE = "VERSEMENT_PENALITE", _("Versement pénalité")
+        # Dette de COTISATION MANQUÉE (apps.tontine.DetteCotisation), distincte
+        # d'une pénalité : voir apps.tontine.services.dette_service. Débit du
+        # débiteur (DETTE_COTISATION) et crédit du bénéficiaire lésé
+        # (VERSEMENT_DETTE_COTISATION), tous deux rattachés à tontine ET tour
+        # (le tour manqué à l'origine de la dette, potentiellement plusieurs
+        # tours en arrière au moment du règlement).
+        DETTE_COTISATION = "DETTE_COTISATION", _("Dette de cotisation manquée")
+        VERSEMENT_DETTE_COTISATION = "VERSEMENT_DETTE_COTISATION", _("Versement dette de cotisation")
 
     # Clé étrangère
     tontine = models.ForeignKey(Tontine, on_delete=models.CASCADE, null=True, blank=True)
@@ -168,6 +176,21 @@ class Transaction(models.Model):
                     )
                     | models.Q(
                         type_transaction="VERSEMENT_PENALITE",
+                        tontine__isnull=False,
+                        tour__isnull=False,
+                        epargne__isnull=True,
+                    )
+                    # Dettes de cotisation manquée (apps.tontine.DetteCotisation) :
+                    # même contrainte de cohérence que PENALITE/VERSEMENT_PENALITE
+                    # (voir apps.tontine.services.dette_service).
+                    | models.Q(
+                        type_transaction="DETTE_COTISATION",
+                        tontine__isnull=False,
+                        tour__isnull=False,
+                        epargne__isnull=True,
+                    )
+                    | models.Q(
+                        type_transaction="VERSEMENT_DETTE_COTISATION",
                         tontine__isnull=False,
                         tour__isnull=False,
                         epargne__isnull=True,
@@ -289,6 +312,19 @@ class Transaction(models.Model):
             if self.epargne_id:
                 raise ValidationError(
                     {"epargne": _("Une pénalité ne doit pas référencer l’épargne personnelle.")}
+                )
+
+        elif tt in (T.DETTE_COTISATION, T.VERSEMENT_DETTE_COTISATION):
+            if not self.tontine_id or not self.tour_id:
+                raise ValidationError(
+                    {
+                        "tontine": _("Une dette de cotisation doit référencer la tontine et le tour concernés."),
+                        "tour": _("Une dette de cotisation doit référencer la tontine et le tour concernés."),
+                    }
+                )
+            if self.epargne_id:
+                raise ValidationError(
+                    {"epargne": _("Une dette de cotisation ne doit pas référencer l’épargne personnelle.")}
                 )
 
     def save(self, *args, **kwargs):

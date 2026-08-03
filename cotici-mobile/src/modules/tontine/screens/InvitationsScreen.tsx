@@ -19,14 +19,8 @@ import {
   refuseTontineInvitation,
   type TontineInvitation,
 } from '@/shared/api';
+import { frequenceLabel } from '@/shared/lib';
 
-const frequenceLabel: Record<string, string> = {
-  QUOTIDIENNE: 'Quotidienne',
-  HEBDOMADAIRE: 'Hebdomadaire',
-  MENSUELLE: 'Mensuelle',
-  PERSONALISE: 'Personnalisée',
-  PERSONNALISE: 'Personnalisée',
-};
 
 function formatAmount(n: number): string {
   return `${n.toLocaleString('fr-FR')} F`;
@@ -217,7 +211,9 @@ export default function InvitationsScreen() {
         ) : (
           items.map((invitation) => {
             const busy = busyToken === invitation.token;
-            const freq = invitation.frequence ? frequenceLabel[invitation.frequence] ?? invitation.frequence : null;
+            const freq = invitation.frequence
+              ? frequenceLabel(invitation.frequence, invitation.frequence_personnalise)
+              : null;
             return (
               <Card key={invitation.token} variant="soft" style={styles.card}>
                 <View style={styles.topRow}>

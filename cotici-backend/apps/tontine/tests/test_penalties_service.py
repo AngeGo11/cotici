@@ -160,19 +160,20 @@ class ConstaterPenaliteTests(TestCase):
         self.assertTrue(penalite.est_automatique)
         self.assertEqual(penalite.tour_id, tour.pk)
 
-    def test_seul_le_payeur_courant_est_penalisable_pas_les_rangs_suivants(self):
-        """Le rang 1 (host) est en retard depuis 48h : les rangs 2 et 3, qui
-        n'ont structurellement pas encore pu payer, ne doivent JAMAIS recevoir
-        de pénalité, même en les soumettant explicitement à `constater_penalite`."""
+    def test_paiement_libre_tous_les_membres_impayes_sont_penalisables(self):
+        """PAIEMENT LIBRE (décision produit) : la deadline est UNIFORME par
+        tour, plus une notion de "payeur courant" unique — tous les membres
+        n'ayant pas cotisé peuvent être simultanément pénalisés."""
         tour = self._tour_en_retard()
         p2 = constater_penalite(tour, self.member2, self.regle, now=self.now)
         p3 = constater_penalite(tour, self.member3, self.regle, now=self.now)
-        self.assertIsNone(p2)
-        self.assertIsNone(p3)
-        self.assertEqual(Penalite.objects.count(), 0)
+        self.assertIsNotNone(p2)
+        self.assertIsNotNone(p3)
+        self.assertEqual(Penalite.objects.count(), 2)
 
-    def test_rang_intermediaire_en_retard_ne_penalise_pas_les_rangs_suivants(self):
-        """rang 3 en retard depuis 10 jours : rangs 4/5 jamais pénalisés."""
+    def test_membre_ayant_deja_cotise_nest_jamais_penalise(self):
+        """Un membre qui a déjà réglé sa cotisation pour ce tour n'est jamais
+        pénalisé, quel que soit son rang."""
         member4 = _user("mem4")
         member5 = _user("mem5")
         tontine, regle = _tontine_avec_regle(self.host, nombre_max=5)
@@ -181,25 +182,18 @@ class ConstaterPenaliteTests(TestCase):
         _add_member(tontine, member4, 4)
         _add_member(tontine, member5, 5)
         tour = _make_tour(tontine, self.host, 1, date_echeance=self.now - timedelta(days=10))
-        # host (rang1) et member2 (rang2) ont déjà cotisé, tôt après
-        # l'ouverture du tour (backdaté), member3 (rang3) est le payeur
-        # courant, en retard depuis largement plus que le délai de grâce.
-        _debit_reussi(
-            tour, self.host, regle.montant_cotisation, date_transaction=self.now - timedelta(days=9)
-        )
-        _debit_reussi(
-            tour, self.member2, regle.montant_cotisation, date_transaction=self.now - timedelta(days=8)
-        )
+        _debit_reussi(tour, self.host, regle.montant_cotisation)
+        _debit_reussi(tour, self.member2, regle.montant_cotisation)
 
         p3 = constater_penalite(tour, self.member3, regle, now=self.now)
-        self.assertIsNotNone(p3)
-
         p4 = constater_penalite(tour, member4, regle, now=self.now)
         p5 = constater_penalite(tour, member5, regle, now=self.now)
-        self.assertIsNone(p4)
-        self.assertIsNone(p5)
-        self.assertEqual(Penalite.objects.filter(user=member4).count(), 0)
-        self.assertEqual(Penalite.objects.filter(user=member5).count(), 0)
+        self.assertIsNotNone(p3)
+        self.assertIsNotNone(p4)
+        self.assertIsNotNone(p5)
+
+        p_host = constater_penalite(tour, self.host, regle, now=self.now)
+        self.assertIsNone(p_host)
 
     def test_beneficiaire_du_tour_est_penalisable_comme_les_autres(self):
         """Le bénéficiaire (`tour.user`) peut être rang 1 et donc payeur
@@ -214,32 +208,19 @@ class ConstaterPenaliteTests(TestCase):
         penalite = constater_penalite(tour, self.host, self.regle, now=self.now)
         self.assertIsNone(penalite)
 
-    def test_deadline_glissante_rang_2_utilise_date_debit_du_rang_1(self):
-        """Le rang 2 devient payeur seulement quand le rang 1 a payé : sa
-        deadline glisse sur cette date, jamais sur l'échéance figée du tour."""
-        tour = _make_tour(self.tontine, self.host, 1, date_echeance=self.now - timedelta(days=5))
-        # host paie tardivement, bien après l'échéance mais toujours "maintenant".
-        debit_tardif = self.now - timedelta(hours=1)
-        wallet, _ = Wallet.objects.get_or_create(user=self.host)
-        Transaction.objects.create(
-            wallet=wallet,
-            tontine=tour.tontine,
-            tour=tour,
-            solde_courant=wallet.solde_courant,
-            ref_transaction="DEB-tardif",
-            client_ref="cot:tardif",
-            mode_de_paiement=Transaction.MODE_DE_PAIEMENT.SOLDE_COTICI,
-            montant_transaction=self.regle.montant_cotisation,
-            statut_transaction=Transaction.STATUT_TRANSACTION.REUSSIE,
-            type_transaction=Transaction.TYPE_TRANSACTION.DEBIT,
+    def test_ignorer_delai_grace_permet_le_constat_avant_lexpiration_de_la_grace(self):
+        """`ignorer_delai_grace=True` (utilisé exclusivement par la clôture
+        forcée à échéance, voir `cloture_service.cloturer_tour`) constate la
+        pénalité même si le délai de grâce n'a pas fini de s'écouler."""
+        tour = _make_tour(self.tontine, self.host, 1, date_echeance=self.now)
+        penalite = constater_penalite(
+            tour, self.member2, self.regle, now=self.now, ignorer_delai_grace=True
         )
-        Transaction.objects.filter(ref_transaction="DEB-tardif").update(date_transaction=debit_tardif)
-
-        # member2 devient payeur à `debit_tardif` (1h avant `now`) + grâce
-        # 24h : la deadline n'est pas encore atteinte malgré l'échéance
-        # ancienne du tour.
-        penalite = constater_penalite(tour, self.member2, self.regle, now=self.now)
-        self.assertIsNone(penalite)
+        self.assertIsNotNone(penalite)
+        # Sans ce flag, le délai de grâce (24h) n'étant pas écoulé, rien n'est
+        # constaté pour un autre membre dans la même situation.
+        sans_flag = constater_penalite(tour, self.member3, self.regle, now=self.now)
+        self.assertIsNone(sans_flag)
 
     def test_garde_fou_penalites_automatiques_false(self):
         self.regle.penalites_automatiques = False

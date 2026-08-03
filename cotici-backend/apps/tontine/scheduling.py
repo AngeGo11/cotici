@@ -138,3 +138,64 @@ def retard_offsets(regle: TontineRegle) -> list[timedelta]:
     if freq in (F.HEBDOMADAIRE, F.PERSONNALISE):
         return [timedelta(days=1)]
     return []
+
+
+# ---------------------------------------------------------------------------
+# Clôture forcée à échéance (règle produit 2026) : "23h59" heure locale.
+#
+# `tour_echeance` ci-dessus reste le cache canonique de `TourTontine.date_echeance`
+# (calcul brut `tour.date + delta`, sans alignement de fin de journée) : le
+# modifier casserait les rappels déjà calibrés dessus (`reminder_targets`) et
+# le contrat mobile qui lit ce champ tel quel. La clôture forcée a besoin d'un
+# instant PRÉCIS ("23h59:59 heure locale du jour d'échéance / de fin de mois")
+# qui n'est PAS ce cache : ces fonctions le dérivent séparément, à la volée,
+# sans jamais réécrire `date_echeance`.
+# ---------------------------------------------------------------------------
+import calendar
+
+try:  # Python 3.9+ (stdlib) — présent dans l'environnement cible du projet.
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - filet de sécurité, non attendu en prod.
+    ZoneInfo = None  # type: ignore[assignment]
+
+
+def _local_zone():
+    from django.conf import settings
+
+    tz_name = getattr(settings, "TONTINE_TIMEZONE", "Africa/Abidjan")
+    if ZoneInfo is None:  # pragma: no cover
+        from django.utils import timezone as dj_tz
+
+        return dj_tz.get_default_timezone()
+    return ZoneInfo(tz_name)
+
+
+def cloture_cutoff(regle: TontineRegle, tour: TourTontine) -> Optional[datetime]:
+    """Instant exact de clôture forcée de `tour`, "23h59:59" heure locale :
+
+    - JOURNALIER : même jour calendaire local que l'ouverture du tour ;
+    - HEBDOMADAIRE : jour calendaire local J+7 après l'ouverture ;
+    - MENSUEL : dernier jour calendaire local du mois d'ouverture ;
+    - PERSONNALISÉE : jour calendaire local `tour.date + frequence_personalise` jours.
+
+    Retourne `None` si la durée ne peut être déterminée (mêmes conditions que
+    `tour_echeance`) — dans ce cas, aucune clôture automatique n'est possible
+    pour ce tour (nécessite une intervention manuelle via l'API existante).
+    """
+    delta = frequence_delta(regle)
+    if delta is None:
+        return None
+
+    tz = _local_zone()
+    ouverture_locale = tour.date.astimezone(tz)
+    F = TontineRegle.FREQUENCE_COTISATION
+
+    if regle.frequence == F.MENSUEL:
+        annee, mois = ouverture_locale.year, ouverture_locale.month
+        dernier_jour = calendar.monthrange(annee, mois)[1]
+        jour_cutoff = ouverture_locale.replace(day=dernier_jour)
+    else:
+        jour_cutoff = ouverture_locale + delta
+
+    cutoff_local = jour_cutoff.replace(hour=23, minute=59, second=59, microsecond=0)
+    return cutoff_local.astimezone(tz).astimezone(tour.date.tzinfo or tz)

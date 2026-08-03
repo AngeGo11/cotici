@@ -19,20 +19,7 @@ import {
   previewTontineInvitation,
   type TontineInvitation,
 } from '@/shared/api';
-
-function frequenceLabel(f: string | null, days?: number | null): string {
-  const map: Record<string, string> = {
-    JOURNALIER: 'Journalière',
-    HEBDOMADAIRE: 'Hebdomadaire',
-    MENSUEL: 'Mensuelle',
-    'PERSONNALISÉE': 'Personnalisée',
-    PERSONALISE: 'Personnalisée',
-  };
-  if (f === 'PERSONNALISÉE' || f === 'PERSONALISE') {
-    return days ? `Tous les ${days} jours` : 'Personnalisée';
-  }
-  return f ? (map[f] ?? f) : '—';
-}
+import { frequenceLabel } from '@/shared/lib';
 
 function ordreLabel(o: string | null | undefined): string {
   if (!o) return '—';
