@@ -2,15 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$ROOT_DIR/backend"
+BACKEND_DIR="$ROOT_DIR/cotici-backend"
+MOBILE_DIR="$ROOT_DIR/cotici-mobile"
 
-if [[ ! -f "$ROOT_DIR/package.json" ]]; then
-  echo "Erreur: package.json introuvable a la racine du projet."
+if [[ ! -f "$MOBILE_DIR/package.json" ]]; then
+  echo "Erreur: cotici-mobile/package.json introuvable."
   exit 1
 fi
 
 if [[ ! -f "$BACKEND_DIR/manage.py" ]]; then
-  echo "Erreur: backend/manage.py introuvable."
+  echo "Erreur: cotici-backend/manage.py introuvable."
   exit 1
 fi
 
@@ -47,12 +48,12 @@ PIDS+=("$!")
 
 echo "2) Proxy Node..."
 (
-  cd "$ROOT_DIR"
+  cd "$MOBILE_DIR"
   npm run proxy
 ) &
 PIDS+=("$!")
 
 echo "3) Frontend Expo..."
 echo "Serveurs lances. Utilise i/a/w dans Expo. Ctrl+C pour tout arreter."
-cd "$ROOT_DIR"
+cd "$MOBILE_DIR"
 npm run start

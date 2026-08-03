@@ -40,7 +40,7 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-/ios
-/android
+cotici-mobile/ios/
+cotici-mobile/android/
 .cursor/
 .claude/

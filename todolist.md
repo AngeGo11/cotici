@@ -84,7 +84,7 @@ _Légende : `[x]` = fait · `[ ]` = à faire · `~` = partiel / incohérence_
 
 ### Back-office administrateur (`cotici-admin`) — socle (phase 0)
 
-- [x] **App Django dédiée** `backend/apps/administration/` — n'possède aucune donnée métier, elle orchestre les apps existantes
+- [x] **App Django dédiée** `cotici-backend/apps/administration/` — n'possède aucune donnée métier, elle orchestre les apps existantes
 - [x] `StaffProfile` (OneToOne `User`) + `StaffLoginAttempt` — sans profil staff actif, `/api/admin/` est inaccessible par construction
 - [x] **Rôles et permissions en Python** (`domain/roles.py`) — 5 rôles (`super_admin`, `operateur`, `support`, `auditeur` lecture seule, `compliance`) × 18 codes de permission ; la matrice vit en Git, donc élargir un droit passe par une revue de code
 - [x] **Authentification isolée du mobile** — session Django (`cotici_admin_sessionid`, HttpOnly/`SameSite=Strict`) + TOTP, jamais de JWT ; `AdminSessionAuthentication` **rejette explicitement** tout `Authorization: Bearer`
@@ -94,7 +94,7 @@ _Légende : `[x]` = fait · `[ ]` = à faire · `~` = partiel / incohérence_
 - [x] **API** — `auth/` (csrf, login, totp setup/verify, logout), `me/` (profil + permissions effectives), `staff/` (création, changement de rôle, activation/désactivation, réinitialisation 2FA — toutes auditées, auto-modification interdite), `audit/` (lecture unifiée `AuditLog` + `AdminActionLog`, paginée)
 - [x] Throttling dédié `admin_login` (par IP **et** par compte) / `admin_action`
 - [x] `manage.py create_staff` — amorçage du premier super-admin hors API
-- [x] **SPA `admin/`** (projet Vite autonome, port 5174) — domaine, déploiement et cookie isolés du site public
+- [x] **SPA `cotici-admin/`** (projet Vite autonome, port 5174) — domaine, déploiement et cookie isolés du site public
   - Shell, navigation filtrée par permissions, gardes de route, minuteur d'inactivité
   - Modules fonctionnels : tableau de bord, **journal d'audit**, **gestion du staff**
   - 18 composants UI (dont `ReasonDialog` imposant un motif), client API à cookie de session (aucun token en JS)
@@ -236,9 +236,9 @@ Chaque module a déjà son dossier, ses endpoints réservés et une page « à v
 
 ### 🟢 Priorité basse
 
-- [ ] **Tests frontend** — 0 test RN (aucun `*.test.ts(x)` ni `__tests__`), et 0 test sur la SPA `admin/`
+- [ ] **Tests frontend** — 0 test RN (aucun `*.test.ts(x)` ni `__tests__`), et 0 test sur la SPA `cotici-admin/`
 - [ ] Tests backend `apps/utils` (zéro couverture) et endpoints `count_*`/`me` de `authn`
-- [ ] App **web** (`web/`) — très en retard sur le mobile, pas de parité fonctionnelle
+- [ ] App **web** (`cotici-landing/`) — très en retard sur le mobile, pas de parité fonctionnelle
 - [ ] Nettoyage legacy — `tontinePhase.ts` (encore utilisé par `AdminScreen`), style orphelin `demoLink` dans `LandingScreen`, données mock mortes
 - [ ] UX réseau — retry, états vides homogènes sur toutes les listes
 - [ ] Accessibilité / confirmations de montants sur les parcours financiers
@@ -250,15 +250,15 @@ Chaque module a déjà son dossier, ses endpoints réservés et une page « à v
 
 | Problème | Fichier / zone |
 |----------|----------------|
-| `cycle_termine()` dépend de `est_active` au lieu de `etat` | `backend/apps/tontine/helpers.py:143` |
-| Fin de cycle met `est_active=false` sans changer `etat` | `backend/apps/tontine/views.py:719-720` |
+| `cycle_termine()` dépend de `est_active` au lieu de `etat` | `cotici-backend/apps/tontine/helpers.py:143` |
+| Fin de cycle met `est_active=false` sans changer `etat` | `cotici-backend/apps/tontine/views.py:719-720` |
 | Tontine archivée → aucun écran de consultation | Pas d'équivalent `SavingsTabScreen` archivés |
 | Membre ne peut pas retirer une tontine terminée de sa liste | UI + backend manquants |
 | `AdminScreen` 100 % mocké (faux noms, fausses dates) | `src/modules/profile/screens/AdminScreen.tsx:19-32` |
 | Stats profil fictives (`'2'` en dur) | `src/modules/profile/screens/ProfileTabScreen.tsx` |
 | `ExclureMembreScreen` / `ModifierReglesScreen` sans backend | `src/modules/tontine/screens/` |
 | 2FA du back-office désactivée en local (`ADMIN_TOTP_REQUIRED=False`) | `.env` |
-| `/admin/` (django-admin) contourne `AdminActionLog` et permet de muter les soldes | `backend/config/urls.py` |
+| `/admin/` (django-admin) contourne `AdminActionLog` et permet de muter les soldes | `cotici-backend/config/urls.py` |
 | Tableau de bord du back-office sans endpoint de métriques | `/api/admin/dashboard/*` (phase 1) |
 | Aucune garde de route auth | `app/_layout.tsx` |
 | `SolidarityScreen` (mode groupe) mocké et orphelin | `src/modules/solidarity/screens/SolidarityScreen.tsx` |

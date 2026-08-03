@@ -22,31 +22,41 @@ Langue produit : **français**. Devise affichée : **FCFA**. Identité visuelle 
 
 ## 2. Structure du dépôt (monorepo)
 
+Quatre projets **indépendants**, côte à côte. Chacun a ses propres dépendances,
+son propre build et sa propre cible de déploiement ; aucun ne partage de code
+avec un autre.
+
 ```
 cotici/
-├── app/                    # Routes Expo Router (fichiers = écrans)
-├── src/
-│   ├── modules/            # Logique métier par domaine (auth, tontine, savings, …)
-│   ├── shared/             # API, auth, thème, UI partagée
-│   ├── components/         # Composants transverses (tab bar, paiement, …)
-│   ├── data/               # Données statiques / mocks (à remplacer par l’API)
-│   └── constants/          # Anciens tokens (préférer shared/theme/)
-├── backend/                # API Django REST
-├── web/                    # Landing marketing (Vite + React, indépendant de l’app mobile)
-├── proxy-server.mjs        # Proxy Node entre l’app mobile et Django
+├── cotici-mobile/          # App Expo / React Native
+│   ├── app/                # Routes Expo Router (fichiers = écrans)
+│   ├── src/
+│   │   ├── modules/        # Logique métier par domaine (auth, tontine, savings, …)
+│   │   ├── shared/         # API, auth, thème, UI partagée
+│   │   ├── components/     # Composants transverses (tab bar, paiement, …)
+│   │   ├── data/           # Données statiques / mocks (à remplacer par l’API)
+│   │   └── constants/      # Anciens tokens (préférer shared/theme/)
+│   ├── assets/             # Images et icônes de l’app mobile
+│   ├── ios/ · android/     # Dossiers natifs générés (non versionnés)
+│   └── proxy-server.mjs    # Proxy Node entre l’app mobile et Django
+├── cotici-landing/         # Landing marketing (Vite + React), port 5173
+├── cotici-admin/           # Back-office SPA (Vite + React), port 5174
+├── cotici-backend/         # API Django REST, port 8000
+├── package.json            # Raccourcis npm vers les 4 projets (aucune dépendance)
+├── docker-compose.yml      # PostgreSQL local
 ├── start.sh                # Lance Django + proxy + Expo en parallèle
 ├── todolist.md             # Backlog fonctionnel détaillé
-└── .env                    # Variables locales (non versionné idéalement)
+└── .env                    # Variables locales (non versionné)
 ```
 
-**Règle d’architecture frontend** : les écrans vivent dans `src/modules/<domaine>/screens/`, les routes dans `app/` ne font qu’**exporter** le screen :
+**Règle d’architecture frontend** : les écrans vivent dans `cotici-mobile/src/modules/<domaine>/screens/`, les routes dans `cotici-mobile/app/` ne font qu’**exporter** le screen :
 
 ```tsx
 // app/(tabs)/savings.tsx
 export { default } from '@/modules/savings/screens/SavingsTabScreen';
 ```
 
-Alias TypeScript : `@/*` → `src/*` (voir `tsconfig.json`).
+Alias TypeScript : `@/*` → `src/*` (voir `cotici-mobile/tsconfig.json`).
 
 ---
 
@@ -55,7 +65,7 @@ Alias TypeScript : `@/*` → `src/*` (voir `tsconfig.json`).
 | Couche | Technologies |
 |--------|----------------|
 | **App mobile** | Expo 55, React 19, React Native 0.83, **expo-router** (file-based routing) |
-| **Site web** | Vite 6, React 19, Tailwind (`web/`) |
+| **Site web** | Vite 6, React 19, Tailwind (`cotici-landing/`) |
 | **API** | Django 5.x (settings indiquent 5.2), **Django REST Framework**, **SimpleJWT** |
 | **Base de données** | PostgreSQL (port souvent `5433` en local) |
 | **Proxy dev** | Serveur HTTP Node natif (`proxy-server.mjs`, port **8001**) |
@@ -70,7 +80,7 @@ Polices : **Space Grotesk** (titres), **Outfit** (corps) — chargées dans `app
 ### Prérequis
 
 - Node.js + npm
-- Python 3 + venv dans `backend/.venv` (ou racine)
+- Python 3 + venv dans `cotici-backend/.venv` (ou racine)
 - PostgreSQL avec une base configurée dans `.env`
 
 ### Variables d’environnement (`.env` à la racine)
@@ -101,15 +111,21 @@ Démarre dans l’ordre :
 ### Commandes utiles
 
 ```bash
+# Installer les dépendances des 3 projets JS
+npm run install:all
+
 # Backend seul
-cd backend && .venv/bin/python manage.py migrate
-cd backend && .venv/bin/python manage.py runserver
+cd cotici-backend && .venv/bin/python manage.py migrate
+cd cotici-backend && .venv/bin/python manage.py runserver
 
 # Migrations après changement de modèles
 python manage.py makemigrations && python manage.py migrate
 
-# Site marketing
-npm run web:site
+# Depuis la racine — raccourcis vers chaque projet
+npm run mobile          # Expo
+npm run proxy           # Proxy Node
+npm run landing         # Landing marketing (5173)
+npm run admin           # Back-office (5174)
 
 # Superuser Django (voir commentaires dans .env)
 ```
@@ -129,7 +145,7 @@ L’app mobile **ne parle pas directement à Django** en développement : elle a
 
 - URL de base côté app : `getApiBaseUrl()` dans `src/shared/auth/authApi.ts` → `process.env.EXPO_PUBLIC_PROXY_URL` ou `http://127.0.0.1:8001`.
 - **Toute nouvelle route API** doit être ajoutée à **deux endroits** :
-  1. `backend/apps/<app>/urls.py` + vues Django
+  1. `cotici-backend/apps/<app>/urls.py` + vues Django
   2. `proxy-server.mjs` (mapping explicite `/api/...` → `/api/.../` Django)
 
 Routes actuellement exposées par le proxy (extrait) :
@@ -158,7 +174,7 @@ Pattern API frontend recommandé (déjà en place pour wallet & savings) :
 
 ## 6. Authentification
 
-- Modèle utilisateur custom : `backend/apps/authn` → `AUTH_USER_MODEL = "authn.User"`.
+- Modèle utilisateur custom : `cotici-backend/apps/authn` → `AUTH_USER_MODEL = "authn.User"`.
 - Champs métier : `code_pin` (4 chiffres), `numero_telephone`.
 - Flux : inscription / login → **OTP** (`OtpChallenge`) → tokens JWT (`access` + `refresh`).
 - En dev, les SMS sont souvent loggés en console (pas de fournisseur SMS réel).
@@ -250,7 +266,7 @@ Lors d’ajouts sur l’épargne : penser aux versements (`VERSEMENT_EPARGNE_PER
 3. **Expo Router** — nouveau screen = fichier dans `app/` + implémentation dans `src/modules/.../screens/`.
 4. **Pas de commit automatique** — l’utilisateur demande explicitement les commits.
 5. **Secrets** — ne pas committer `.env` ; `SECRET_KEY` Django est encore en dur (dev only).
-6. **Tests backend** — existent pour wallet (`backend/apps/wallet/tests/`).
+6. **Tests backend** — existent pour wallet (`cotici-backend/apps/wallet/tests/`).
 7. **Montants** — `Decimal` côté Django, entiers FCFA dans beaucoup d’écrans ; utiliser `parseBalance` / `formatFcfaDots` côté shared auth.
 
 ---
@@ -261,8 +277,8 @@ Lors d’ajouts sur l’épargne : penser aux versements (`VERSEMENT_EPARGNE_PER
 |---------|----------|
 | `start.sh` | Orchestration dev |
 | `proxy-server.mjs` | Contrat API mobile ↔ Django |
-| `backend/config/settings.py` | Apps, DB, JWT, CORS |
-| `backend/config/urls.py` | Montage des apps |
+| `cotici-backend/config/settings.py` | Apps, DB, JWT, CORS |
+| `cotici-backend/config/urls.py` | Montage des apps |
 | `src/shared/auth/AuthContext.tsx` | Session utilisateur |
 | `src/shared/api/walletApi.ts` | Modèle d’appel API typé |
 | `src/shared/api/savingsApi.ts` | Épargne |
@@ -277,7 +293,7 @@ Quand tu aides sur Cotici :
 
 1. **Lire `todolist.md`** pour la priorité produit avant d’inventer des features.
 2. **Vérifier le proxy** si un appel réseau échoue en 404 depuis l’app — souvent la route manque dans `proxy-server.mjs`.
-3. **Ne pas confondre** `web/` (landing) et l’app Expo dans `app/` + `src/`.
+3. **Ne pas confondre** `cotici-landing/` (landing) et l’app Expo dans `cotici-mobile/`.
 4. **Préférer** étendre `src/shared/api/` plutôt que des `fetch` éparpillés dans les screens.
 5. **Aligner** types TS ↔ réponses JSON Django (noms de champs français / snake_case).
 6. **Migrations** : après changement de `models.py`, proposer `makemigrations` + `migrate`.
@@ -294,9 +310,9 @@ Quand tu aides sur Cotici :
 
 ---
 
-## 14. Site web (`web/`)
+## 14. Site web (`cotici-landing/`)
 
-Landing marketing indépendante (composants `web/src/components/landing/`). Ne partage pas le code métier de l’app mobile. Scripts : `npm run web:site`, `npm run web:site:build`.
+Landing marketing indépendante (composants `cotici-landing/src/components/landing/`). Ne partage ni code ni assets avec l’app mobile : ses images vivent dans `cotici-landing/src/assets/` et `cotici-landing/public/`. Scripts (depuis la racine) : `npm run landing`, `npm run landing:build`.
 
 ---
 
