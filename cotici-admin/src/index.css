@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 font-sans text-[13px] text-slate-800 antialiased;
+  }
+
+  ::selection {
+    @apply bg-brand/20 text-slate-900;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand/50 ring-offset-1 ring-offset-white;
+  }
+}
+
+@layer components {
+  /* Densite back-office : tableaux compacts et lisibles. */
+  .admin-table {
+    @apply w-full border-collapse text-left text-[13px];
+  }
+
+  .admin-table thead th {
+    @apply whitespace-nowrap border-b border-slate-200 bg-slate-100/70 px-3 py-2 text-xxs font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  .admin-table tbody td {
+    @apply border-b border-slate-100 px-3 py-2 align-middle;
+  }
+
+  .admin-table tbody tr:hover {
+    @apply bg-slate-50;
+  }
+
+  .field-label {
+    @apply mb-1 block text-xxs font-semibold uppercase tracking-wide text-slate-500;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,0 +1,421 @@
+import { useState, useRef, type MutableRefObject } from 'react';
+import { 
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { Colors, withOpacity } from '@/shared/theme/Colors';
+import { Fonts } from '@/shared/theme/Fonts';
+import { Theme } from '@/shared/theme/Theme';
+
+const PIN_LENGTH = 4;
+
+export default function CreateAccountScreen() {
+  const router = useRouter();
+  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [pin, setPin] = useState<string[]>(() => Array(PIN_LENGTH).fill(''));
+  const [confirmPin, setConfirmPin] = useState<string[]>(() => Array(PIN_LENGTH).fill(''));
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const pinRefs = useRef<(TextInput | null)[]>([]);
+  const confirmPinRefs = useRef<(TextInput | null)[]>([]);
+
+  const handlePinChange = (
+    index: number,
+    value: string,
+    current: string[],
+    setCurrent: (v: string[]) => void,
+    refs: MutableRefObject<(TextInput | null)[]>,
+  ) => {
+    if (value.length > 1) return;
+    if (value && !/^\d$/.test(value)) return;
+    const next = [...current];
+    next[index] = value;
+    setCurrent(next);
+    if (value && index < PIN_LENGTH - 1) refs.current[index + 1]?.focus();
+  };
+
+  const handlePinKeyPress = (
+    index: number,
+    key: string,
+    digit: string,
+    refs: MutableRefObject<(TextInput | null)[]>,
+  ) => {
+    if (key === 'Backspace' && !digit && index > 0) refs.current[index - 1]?.focus();
+  };
+
+  const pinComplete = pin.every((d) => d !== '');
+  const confirmComplete = confirmPin.every((d) => d !== '');
+  const pinsMatch = pinComplete && confirmComplete && pin.join('') === confirmPin.join('');
+  const canSubmit =
+    lastName.trim().length > 0 &&
+    firstName.trim().length > 0 &&
+    phoneNumber.trim().length > 0 &&
+    pinsMatch &&
+    acceptedTerms;
+
+  const normalizePhone = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.startsWith('225') && digits.length > 10) return digits.slice(3);
+    return digits;
+  };
+
+  const onSubmit = async () => {
+    if (!canSubmit) return;
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+    const proxyBaseUrl = process.env.EXPO_PUBLIC_PROXY_URL || 'http://127.0.0.1:8001';
+    const normalizedPhone = normalizePhone(phoneNumber);
+    const pinCode = pin.join('');
+    try {
+      const otpResponse = await fetch(`${proxyBaseUrl}/api/request-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: normalizedPhone,
+          password: pinCode,
+          purpose: 'register',
+          numero_telephone: normalizedPhone,
+          first_name: firstName,
+          last_name: lastName,
+          email: '',
+        }),
+      });
+
+      const otpData = await otpResponse.json();
+      if (!otpResponse.ok) {
+        const otpError =
+          typeof otpData?.detail === 'string'
+            ? otpData.detail
+            : 'Impossible d’envoyer le code OTP.';
+        setErrorMessage(otpError);
+        return;
+      }
+
+      router.push({
+        pathname: '/otp',
+        params: {
+          challengeId: String(otpData?.challenge_id || ''),
+          phoneHint: String(otpData?.phone_hint || ''),
+        },
+      });
+    } catch {
+      setErrorMessage('Connexion impossible. Vérifiez votre connexion internet et réessayez.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+          <View style={styles.headerLogo}>
+            <Image source={require('../../../../assets/logo_cotici.png')} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.logoStyle}>COTICI</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Créer un compte</Text>
+          <Text style={styles.subtitle}>Rejoignez COTICI en quelques étapes</Text>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Nom</Text>
+            <TextInput
+              style={styles.textField}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Kouassi"
+              placeholderTextColor={Colors.gray[400]}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Prénom</Text>
+            <TextInput
+              style={styles.textField}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Jean"
+              placeholderTextColor={Colors.gray[400]}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Numéro de téléphone</Text>
+            <View style={styles.phoneInput}>
+              <Text style={styles.flag}>🇨🇮</Text>
+              <Text style={styles.prefix}>+225</Text>
+              <View style={styles.divider} />
+              <TextInput
+                style={styles.phoneField}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="07 XX XX XX XX"
+                placeholderTextColor={Colors.gray[400]}
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Code PIN</Text>
+            <View style={styles.pinRow}>
+              {pin.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={(el) => {
+                    pinRefs.current[index] = el;
+                  }}
+                  style={[
+                    styles.pinInput,
+                    confirmComplete && !pinsMatch ? styles.pinInputError : null,
+                  ]}
+                  value={digit}
+                  onChangeText={(v) =>
+                    handlePinChange(index, v, pin, setPin, pinRefs)
+                  }
+                  onKeyPress={({ nativeEvent }) =>
+                    handlePinKeyPress(index, nativeEvent.key, digit, pinRefs)
+                  }
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  secureTextEntry
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Confirmer le code PIN</Text>
+            <View style={styles.pinRow}>
+              {confirmPin.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={(el) => {
+                    confirmPinRefs.current[index] = el;
+                  }}
+                  style={[
+                    styles.pinInput,
+                    confirmComplete && !pinsMatch ? styles.pinInputError : null,
+                  ]}
+                  value={digit}
+                  onChangeText={(v) =>
+                    handlePinChange(index, v, confirmPin, setConfirmPin, confirmPinRefs)
+                  }
+                  onKeyPress={({ nativeEvent }) =>
+                    handlePinKeyPress(index, nativeEvent.key, digit, confirmPinRefs)
+                  }
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  secureTextEntry
+                />
+              ))}
+            </View>
+            {confirmComplete && !pinsMatch ? (
+              <Text style={styles.errorHint}>Les codes PIN ne correspondent pas</Text>
+            ) : null}
+          </View>
+
+          <AnimatedPressable
+            style={styles.termsRow}
+            onPress={() => setAcceptedTerms(!acceptedTerms)} >
+            <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+              {acceptedTerms ? (
+                <Feather name="check" size={14} color={Colors.white} />
+              ) : null}
+            </View>
+            <Text style={styles.termsText}>
+              J'accepte les conditions d'utilisation et la politique de confidentialité
+            </Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={[styles.submitButton, (!canSubmit || isSubmitting) && styles.submitButtonDisabled]}
+            onPress={onSubmit}
+            disabled={!canSubmit || isSubmitting}
+          >
+            <Text style={styles.submitButtonText}>{isSubmitting ? 'Création...' : 'Continuer'}</Text>
+          </AnimatedPressable>
+          {!!errorMessage && <Text style={styles.errorHint}>{errorMessage}</Text>}
+
+          <AnimatedPressable
+            style={styles.loginLinkWrap}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.loginLink}>
+              Déjà un compte ? <Text style={styles.loginLinkBold}>Se connecter</Text>
+            </Text>
+          </AnimatedPressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Theme.screen.bg, paddingHorizontal: Theme.spacing.page },
+  logoStyle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18},
+  flex: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLogo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  logoImage: { width: 38, height: 38 },
+  headerTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.brand },
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 8, paddingBottom: 32 },
+  title: {
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 28,
+    color: Colors.gray[900],
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 16,
+    color: Colors.gray[500],
+    marginBottom: 28,
+  },
+  fieldGroup: { marginBottom: 20},
+  label: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[700],
+    marginBottom: 8,
+  },
+  textField: {
+    height: 56,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 16,
+    color: Colors.gray[900],
+  },
+  phoneInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gray[50],
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 56,
+    gap: 8,
+  },
+  flag: { fontSize: 24 },
+  prefix: { fontFamily: Fonts.outfit.regular, fontSize: 16, color: Colors.gray[600] },
+  divider: { width: 1, height: 24, backgroundColor: Colors.gray[300], marginLeft: 4 },
+  phoneField: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 16,
+    color: Colors.gray[900],
+    paddingLeft: 8,
+  },
+  pinRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  pinInput: {
+    flex: 1,
+    height: 64,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray[300],
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 24,
+    textAlign: 'center',
+    color: Colors.gray[900],
+  },
+  pinInputError: {
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.danger, 0.5),
+    backgroundColor: withOpacity(Colors.danger, 0.06),
+  },
+  errorHint: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.danger,
+    marginTop: 8,
+  },
+  termsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 24 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.gray[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  termsText: {
+    flex: 1,
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[600],
+    lineHeight: 20,
+  },
+  submitButton: {
+    backgroundColor: Colors.brand,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  submitButtonDisabled: { opacity: 0.45 },
+  submitButtonText: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.white },
+  loginLinkWrap: { alignItems: 'center' },
+  loginLink: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center',
+  },
+  loginLinkBold: { color: Colors.accent, fontFamily: Fonts.outfit.medium },
+});

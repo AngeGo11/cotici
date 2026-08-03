@@ -1,0 +1,30 @@
+services:
+  # ==========================================
+  # BASE DE DONNÉES (PostgreSQL) implémente les corrections que tu juges necessaires on va voir
+  # ==========================================
+  db:
+    image: postgres:15
+    container_name: cotici-db
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cotici-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+volumes:
+  postgres_data:
+
+networks:
+  cotici-network:
+    driver: bridge

@@ -1,0 +1,252 @@
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+ } from 'react-native';
+import { AnimatedPressable } from '@/shared/ui';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { Colors, withOpacity } from '@/shared/theme/Colors';
+import { Fonts } from '@/shared/theme/Fonts';
+import { Theme } from '@/shared/theme/Theme';
+import type { JoinRequest, PaymentValidation } from '@/types';
+import { useLocalSearchParams } from 'expo-router';
+import { needsDefineOrdre, ORDRE_LOCK_MESSAGE } from '@/modules/tontine/utils/ordreRamassage';
+import { useTontinePhase } from '@/modules/tontine/hooks/useTontinePhase';
+
+const joinRequests: JoinRequest[] = [
+  { id: '1', name: 'Sophie Traoré', avatar: 'ST', phone: '+225 07 12 34 56', requestDate: '10 Fév 2026' },
+  { id: '2', name: 'Moussa Keita', avatar: 'MK', phone: '+225 05 98 76 54', requestDate: '09 Fév 2026' },
+];
+
+const paymentValidations: PaymentValidation[] = [
+  { id: '1', memberName: 'Kouassi Jean', amount: 10000, method: 'Cash', date: '10 Fév 2026' },
+  { id: '2', memberName: 'Awa Diallo', amount: 15000, method: 'Espèces', date: '09 Fév 2026' },
+];
+
+const penalties = [
+  { id: 'p1', user: 'Amadou Bamba', type: 'Retard de paiement', amount: 2500, date: '10 Fév 2026', settled: false },
+  { id: 'p2', user: 'Sophie Traoré', type: 'Absence de paiement', amount: 5000, date: '08 Fév 2026', settled: true },
+];
+
+export default function AdminScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ tontineId?: string; tontineNom?: string }>();
+  const tontineId = typeof params.tontineId === 'string' ? params.tontineId : '2';
+  const tontineNom =
+    typeof params.tontineNom === 'string' && params.tontineNom.trim()
+      ? params.tontineNom.trim()
+      : 'Tontine Entrepreneurs';
+  const { phaseState, loading: phaseLoading } = useTontinePhase(tontineId);
+  const showDefineOrdreCta = phaseState
+    ? needsDefineOrdre({
+        phase: phaseState.phase,
+        ordreMode: phaseState.ordreMode,
+        ordrePublie: phaseState.ordrePublie,
+        isAdmin: phaseState.isAdmin,
+      })
+    : false;
+  const ordreVerrouille = phaseState?.ordreMode === 'admin' && (phaseState?.ordrePublie ?? false);
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <AnimatedPressable style={styles.backButton} onPress={() => router.back()}>
+            <Feather name="chevron-left" size={20} color={Colors.gray[700]} />
+          </AnimatedPressable>
+          <View style={styles.adminBadge}><Text style={styles.adminBadgeText}>Mode Administrateur</Text></View>
+        </View>
+
+        <View style={styles.titleRow}>
+          <View style={styles.titleIcon}><Feather name="shield" size={24} color={Colors.brand} /></View>
+          <View>
+            <Text style={styles.title}>Gestion du Groupe</Text>
+            <Text style={styles.subtitle}>{tontineNom}</Text>
+          </View>
+        </View>
+
+        
+
+        
+
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text style={styles.sectionTitle}>Pénalités</Text>
+          <View style={[styles.countBadge, { backgroundColor: Colors.accent }]}>
+            <Text style={styles.countText}>{penalties.length}</Text>
+          </View>
+        </View>
+        {penalties.map((penalty) => (
+          <View key={penalty.id} style={styles.penaltyCard}>
+            <View style={styles.paymentTop}>
+              <View>
+                <Text style={styles.paymentName}>{penalty.user}</Text>
+                <View style={styles.paymentInfo}>
+                  <Text style={styles.penaltyAmount}>{penalty.amount.toLocaleString('fr-FR')} F</Text>
+                  <View style={styles.dot} />
+                  <Text style={styles.paymentMethod}>{penalty.type}</Text>
+                </View>
+              </View>
+              <Text style={styles.paymentDate}>{penalty.date}</Text>
+            </View>
+            <View style={[styles.penaltyStatus, penalty.settled ? styles.penaltyStatusOk : styles.penaltyStatusPending]}>
+              <Text style={[styles.penaltyStatusText, { color: penalty.settled ? Colors.success : Colors.accent }]}>
+                {penalty.settled ? 'Réglée' : 'À régulariser'}
+              </Text>
+            </View>
+          </View>
+        ))}
+
+        {phaseLoading && !phaseState ? (
+          <View style={styles.ordreLockCard}>
+            <ActivityIndicator size="small" color={Colors.brand} />
+            <Text style={styles.ordreLockText}>Chargement de l&apos;état de l&apos;ordre de ramassage…</Text>
+          </View>
+        ) : (
+          <>
+            {showDefineOrdreCta ? (
+              <View style={styles.ordreHintCard}>
+                <Feather name="info" size={18} color={Colors.brand} />
+                <Text style={styles.ordreHintText}>
+                  L&apos;ordre de ramassage se définit depuis la page de la tontine, une fois le groupe
+                  complet. Il ne sera pas modifiable dans les paramètres après publication.
+                </Text>
+              </View>
+            ) : null}
+
+            {ordreVerrouille ? (
+              <View style={styles.ordreLockCard}>
+                <Feather name="lock" size={18} color={Colors.gray[600]} />
+                <Text style={styles.ordreLockText}>{ORDRE_LOCK_MESSAGE}</Text>
+              </View>
+            ) : null}
+          </>
+        )}
+
+        <Text style={[styles.sectionTitle, { paddingHorizontal: Theme.spacing.page, marginTop: 24, marginBottom: 16 }]}>Paramètres du Groupe</Text>
+        <AnimatedPressable
+          style={styles.settingsItem}
+          onPress={() =>
+            router.push({
+              pathname: '/modifier-regles',
+              params: { id: tontineId, tontineNom, ordrePublie: ordreVerrouille ? '1' : '0' },
+            })
+          }
+        >
+          <View style={styles.settingsLeft}>
+            <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.info, 0.1) }]}>
+              <Feather name="settings" size={20} color={Colors.info} />
+            </View>
+            <View>
+              <Text style={styles.settingsLabel}>Modifier les règles</Text>
+              <Text style={styles.settingsDesc}>Montant, fréquence, conditions</Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.settingsItem}
+          onPress={() => router.push({ pathname: '/exclure-membre', params: { id: tontineId, tontineNom } })}
+        >
+          <View style={styles.settingsLeft}>
+            <View style={[styles.settingsIcon, { backgroundColor: withOpacity(Colors.danger, 0.08) }]}>
+              <Feather name="user-minus" size={20} color={Colors.danger} />
+            </View>
+            <View>
+              <Text style={[styles.settingsLabel, { color: Colors.danger }]}>Exclure un membre</Text>
+              <Text style={styles.settingsDesc}>Retirer définitivement du groupe</Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={20} color={Colors.gray[400]} />
+        </AnimatedPressable>
+
+        <View style={styles.infoBanner}>
+          <Feather name="alert-circle" size={20} color={Colors.info} />
+          <Text style={styles.infoText}>Les décisions importantes nécessitent l'accord de la majorité des membres actifs.</Text>
+        </View>
+        <View style={{ height: 24 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Theme.screen.bg },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.page, paddingVertical: 12 },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.gray[100], alignItems: 'center', justifyContent: 'center' },
+  adminBadge: { backgroundColor: withOpacity(Colors.brand, 0.1), paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: withOpacity(Colors.brand, 0.2) },
+  adminBadgeText: { fontFamily: Fonts.outfit.medium, fontSize: 12, color: Colors.brand },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Theme.spacing.page, marginBottom: 24 },
+  titleIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: withOpacity(Colors.brand, 0.1), alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 24, color: Colors.gray[900] },
+  subtitle: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[500] },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.page, marginBottom: 12 },
+  sectionTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 18, color: Colors.gray[900] },
+  countBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },
+  countText: { fontFamily: Fonts.outfit.bold, fontSize: 12, color: Colors.white },
+  requestCard: { marginHorizontal: Theme.spacing.page, backgroundColor: Colors.gray[50], borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: Colors.gray[100] },
+  requestTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  requestLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  requestAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.gray[400], alignItems: 'center', justifyContent: 'center' },
+  requestAvatarText: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.white },
+  requestName: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[900] },
+  requestPhone: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  requestDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  requestActions: { flexDirection: 'row', gap: 8 },
+  acceptButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.success, paddingVertical: 12, borderRadius: 12 },
+  acceptText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.white },
+  rejectButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.danger, paddingVertical: 12, borderRadius: 12 },
+  rejectText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.white },
+  paymentCard: { marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.brand, 0.1), borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: withOpacity(Colors.brand, 0.2) },
+  paymentTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  paymentName: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[900], marginBottom: 4 },
+  paymentInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  paymentAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.brand },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.gray[400] },
+  paymentMethod: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[600] },
+  paymentDate: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  confirmButton: { backgroundColor: Colors.brand, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  confirmText: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.white },
+  penaltyCard: { marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.accent, 0.08), borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: withOpacity(Colors.accent, 0.22) },
+  penaltyAmount: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 14, color: Colors.accent },
+  penaltyStatus: { alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  penaltyStatusPending: { borderColor: withOpacity(Colors.accent, 0.35), backgroundColor: withOpacity(Colors.accent, 0.12) },
+  penaltyStatusOk: { borderColor: withOpacity(Colors.success, 0.35), backgroundColor: withOpacity(Colors.success, 0.1) },
+  penaltyStatusText: { fontFamily: Fonts.outfit.medium, fontSize: 12 },
+  settingsItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: Theme.spacing.page, backgroundColor: Theme.screen.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.gray[200], marginBottom: 12 },
+  settingsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  settingsIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  settingsLabel: { fontFamily: Fonts.outfit.medium, fontSize: 14, color: Colors.gray[900] },
+  settingsDesc: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: Colors.gray[500] },
+  ordreHintCard: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginTop: 8,
+    backgroundColor: withOpacity(Colors.brand, 0.08),
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.15),
+    alignItems: 'flex-start',
+  },
+  ordreHintText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[700], lineHeight: 20 },
+  ordreLockCard: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: Theme.spacing.page,
+    marginTop: 8,
+    backgroundColor: Colors.gray[50],
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    alignItems: 'flex-start',
+  },
+  ordreLockText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[600], lineHeight: 19 },
+  infoBanner: { flexDirection: 'row', gap: 12, marginHorizontal: Theme.spacing.page, backgroundColor: withOpacity(Colors.info, 0.08), borderRadius: 16, padding: 16, marginTop: 24, borderWidth: 1, borderColor: withOpacity(Colors.info, 0.15), alignItems: 'flex-start' },
+  infoText: { flex: 1, fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.info },
+});

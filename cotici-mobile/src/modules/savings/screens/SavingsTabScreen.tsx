@@ -1,0 +1,374 @@
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { AnimatedPressable, EmptyState } from '@/shared/ui';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { Svg, Circle } from 'react-native-svg';
+import { useSavingsGoals } from '@/modules/savings/hooks/useSavingsGoals';
+import { useArchivedSavingsGoals } from '@/modules/savings/hooks/useArchivedSavingsGoals';
+import { Colors, withOpacity } from '@/shared/theme/Colors';
+import { Fonts } from '@/shared/theme/Fonts';
+import { Theme } from '@/shared/theme/Theme';
+
+function MiniProgress({ percentage }: { percentage: number }) {
+  const size = 52;
+  const sw = 5;
+  const r = (size - sw) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = ((100 - percentage) / 100) * c;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={Colors.gray[200]} strokeWidth={sw} fill="none" />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={Colors.success}
+          strokeWidth={sw}
+          fill="none"
+          strokeDasharray={`${c}`}
+          strokeDashoffset={`${offset}`}
+          strokeLinecap="round"
+        />
+      </Svg>
+      <Text style={styles.miniPct}>{percentage}%</Text>
+    </View>
+  );
+}
+
+function GoalBar({ pct }: { pct: number }) {
+  return (
+    <View style={styles.goalBarTrack}>
+      <View style={[styles.goalBarFill, { width: `${Math.min(100, pct)}%` }]} />
+    </View>
+  );
+}
+
+export default function SavingsListScreen() {
+  const router = useRouter();
+  const { goals, loading, error, reload } = useSavingsGoals();
+  const {
+    goals: archivedGoals,
+    loading: loadingArchived,
+    error: archivedError,
+  } = useArchivedSavingsGoals();
+
+  const totalSaved = goals.reduce((s, g) => s + g.saved, 0);
+  const totalTarget = goals.reduce((s, g) => s + g.target, 0);
+  const globalPct =
+    totalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalTarget) * 100)) : 0;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.topRow}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.pageTitle}>{"Mes objectifs d'épargne"}</Text>
+            <Text style={styles.pageSubtitle}>
+              Suivez vos projets et atteignez vos cibles pas à pas
+            </Text>
+          </View>
+          <AnimatedPressable
+            style={styles.addButton}
+            onPress={() => router.push('/create-savings')}
+            accessibilityLabel="Nouveau projet"
+          >
+            <Feather name="plus" size={22} color={Colors.white} />
+          </AnimatedPressable>
+        </View>
+
+        <View style={styles.summaryHero}>
+          <Text style={styles.summaryTag}>{"Vue d'ensemble"}</Text>
+          <View style={styles.summaryRow}>
+            <View>
+              <Text style={styles.summaryLabel}>Épargné au total</Text>
+              <Text style={styles.summaryValue}>{totalSaved.toLocaleString('fr-FR')} F</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.summaryLabel}>Objectif cumulé</Text>
+              <Text style={styles.summaryTarget}>{totalTarget.toLocaleString('fr-FR')} F</Text>
+            </View>
+          </View>
+          <View style={styles.globalBarTrack}>
+            <View style={[styles.globalBarFill, { width: `${globalPct}%` }]} />
+          </View>
+          <Text style={styles.summaryHint}>{globalPct}% de vos objectifs cumulés est atteint</Text>
+        </View>
+
+        <Text style={styles.sectionEyebrow}>Par objectif</Text>
+
+        {loading ? (
+          <ActivityIndicator color={Colors.success} style={styles.loader} />
+        ) : null}
+
+        {!loading && error ? (
+          <EmptyState
+            icon="alert-circle"
+            title="Impossible de charger vos objectifs"
+            description={error}
+            actionLabel="Réessayer"
+            onAction={() => void reload()}
+          />
+        ) : null}
+
+        {!loading && !error && goals.length === 0 ? (
+          <EmptyState
+            icon="target"
+            title="Aucun objectif pour le moment"
+            description="Créez votre premier projet d'épargne pour commencer à suivre vos progrès."
+            actionLabel="Créer un objectif"
+            onAction={() => router.push('/create-savings')}
+          />
+        ) : null}
+
+        {goals.map((goal) => (
+            <AnimatedPressable
+              key={goal.id}
+              style={styles.goalCard}
+              onPress={() =>
+                router.push({ pathname: '/savings-detail', params: { id: goal.id } })
+              }
+            >
+              <View style={styles.goalTop}>
+                <View style={styles.goalLeft}>
+                  <View
+                    style={[
+                      styles.goalIcon,
+                      goal.withdrawn ? styles.goalIconCompleted : null,
+                    ]}
+                  >
+                    <Feather
+                      name={goal.withdrawn ? 'check-circle' : goal.icon}
+                      size={22}
+                      color={Colors.success}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.goalName}>{goal.name}</Text>
+                    {goal.withdrawn ? (
+                      <Text style={styles.goalProgressCompleted}>
+                        Objectif atteint · épargne retirée
+                      </Text>
+                    ) : (
+                      <Text style={styles.goalProgress}>
+                        {goal.saved.toLocaleString('fr-FR')} /{' '}
+                        {goal.target.toLocaleString('fr-FR')} F
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <MiniProgress percentage={goal.percentage} />
+              </View>
+              <GoalBar pct={goal.percentage} />
+            </AnimatedPressable>
+          ))}
+
+        {archivedGoals.length > 0 || loadingArchived ? (
+          <>
+            <Text style={[styles.sectionEyebrow, { marginTop: Theme.spacing.lg }]}>
+              Objectifs archivés
+            </Text>
+            {loadingArchived ? (
+              <ActivityIndicator color={Colors.gray[400]} style={styles.loader} />
+            ) : null}
+            {archivedError ? (
+              <Text style={styles.archivedError}>{archivedError}</Text>
+            ) : null}
+            {archivedGoals.map((goal) => (
+              <AnimatedPressable
+                key={`archived-${goal.id}`}
+                style={[styles.goalCard, styles.goalCardArchived]}
+                onPress={() =>
+                  router.push({ pathname: '/savings-detail', params: { id: goal.id } })
+                }
+              >
+                <View style={styles.goalTop}>
+                  <View style={styles.goalLeft}>
+                    <View style={[styles.goalIcon, styles.goalIconArchived]}>
+                      <Feather name="archive" size={20} color={Colors.gray[500]} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.goalName}>{goal.name}</Text>
+                      <Text style={styles.goalProgress}>
+                        Objectif : {goal.target.toLocaleString('fr-FR')} F
+                      </Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={Colors.gray[400]} />
+                </View>
+              </AnimatedPressable>
+            ))}
+          </>
+        ) : null}
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Theme.screen.bg },
+  scroll: { paddingBottom: 100 },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: Theme.spacing.page,
+    paddingTop: Theme.spacing.sm,
+    paddingBottom: Theme.spacing.lg,
+    gap: Theme.spacing.md,
+  },
+  titleBlock: { flex: 1 },
+  pageTitle: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 26, color: Colors.gray[900], marginBottom: 6 },
+  pageSubtitle: { fontFamily: Fonts.outfit.regular, fontSize: 14, color: Colors.gray[600], lineHeight: 20 },
+  addButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    ...Theme.shadow.soft,
+  },
+  summaryHero: {
+    marginHorizontal: Theme.spacing.page,
+    backgroundColor: Colors.success,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.xl,
+    marginBottom: Theme.spacing.xl,
+    ...Theme.shadow.successHero,
+  },
+  summaryTag: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: 0.8,
+    marginBottom: Theme.spacing.md,
+    textTransform: 'uppercase',
+  },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Theme.spacing.lg },
+  summaryLabel: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: 'rgba(255,255,255,0.85)', marginBottom: 4 },
+  summaryValue: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 26, color: Colors.white },
+  summaryTarget: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 20, color: 'rgba(255,255,255,0.95)' },
+  globalBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    overflow: 'hidden',
+    marginBottom: Theme.spacing.sm,
+  },
+  globalBarFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: Colors.white,
+  },
+  summaryHint: { fontFamily: Fonts.outfit.regular, fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  sectionEyebrow: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 13,
+    color: Colors.gray[500],
+    paddingHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
+    letterSpacing: 0.2,
+  },
+  goalCard: {
+    marginHorizontal: Theme.spacing.page,
+    backgroundColor: Theme.screen.surface,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+    ...Theme.shadow.card,
+  },
+  goalTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Theme.spacing.md,
+  },
+  goalLeft: { flexDirection: 'row', alignItems: 'center', gap: Theme.spacing.md, flex: 1, paddingRight: 8 },
+  goalIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Theme.radius.sm,
+    backgroundColor: withOpacity(Colors.success, 0.12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalName: { fontFamily: Fonts.spaceGrotesk.bold, fontSize: 17, color: Colors.gray[900], marginBottom: 4 },
+  goalProgress: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
+  goalProgressCompleted: {
+    fontFamily: Fonts.outfit.medium,
+    fontSize: 13,
+    color: Colors.success,
+  },
+  goalIconCompleted: {
+    backgroundColor: withOpacity(Colors.success, 0.18),
+  },
+  miniPct: {
+    position: 'absolute',
+    fontFamily: Fonts.spaceGrotesk.bold,
+    fontSize: 11,
+    color: Colors.success,
+  },
+  goalBarTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.gray[100],
+    overflow: 'hidden',
+  },
+  goalBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: Colors.success,
+  },
+  newProjectCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.md,
+    marginHorizontal: Theme.spacing.page,
+    marginTop: Theme.spacing.sm,
+    padding: Theme.spacing.lg,
+    backgroundColor: Theme.screen.surface,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: withOpacity(Colors.brand, 0.25),
+    ...Theme.shadow.soft,
+  },
+  newProjectIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Theme.radius.sm,
+    backgroundColor: withOpacity(Colors.brand, 0.1),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newProjectTitle: { fontFamily: Fonts.outfit.medium, fontSize: 16, color: Colors.gray[900], marginBottom: 2 },
+  newProjectSub: { fontFamily: Fonts.outfit.regular, fontSize: 13, color: Colors.gray[500] },
+  loader: { marginVertical: Theme.spacing.xl },
+  goalCardArchived: {
+    opacity: 0.92,
+    backgroundColor: Colors.gray[50],
+  },
+  goalIconArchived: {
+    backgroundColor: Colors.gray[100],
+  },
+  archivedError: {
+    fontFamily: Fonts.outfit.regular,
+    fontSize: 13,
+    color: Colors.danger,
+    textAlign: 'center',
+    paddingHorizontal: Theme.spacing.page,
+    marginBottom: Theme.spacing.md,
+  },
+});

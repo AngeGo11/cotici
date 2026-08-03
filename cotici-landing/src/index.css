@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    @apply bg-white font-body text-slate-900 antialiased;
+  }
+
+  ::selection {
+    @apply bg-brand/25 text-slate-900;
+  }
+}
+
+@layer components {
+  .grain-overlay {
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-brand via-emerald-500 to-brand-dark bg-clip-text text-transparent;
+  }
+
+  .btn-shine {
+    @apply relative overflow-hidden;
+  }
+
+  .btn-shine::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent;
+    animation: shine 4s ease-in-out infinite;
+  }
+
+  .card-glass {
+    @apply border border-white/70 bg-white/75 shadow-sm backdrop-blur-md;
+  }
+
+  .link-hover-line {
+    @apply relative;
+  }
+
+  .link-hover-line::after {
+    content: '';
+    @apply absolute -bottom-0.5 left-0 h-px w-0 bg-brand transition-all duration-300 ease-out;
+  }
+
+  .link-hover-line:hover::after {
+    @apply w-full;
+  }
+
+  .section-line {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 158, 96, 0.35) 50%,
+      transparent 100%
+    );
+    height: 1px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grid-cta {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .animate-float-phone {
+    animation: float-phone 6s ease-in-out infinite;
+  }
+
+  .perspective-mockup {
+    perspective: 1200px;
+  }
+}
+
+@keyframes float-phone {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(1deg);
+  }
+}
+
+@keyframes shine {
+  0%,
+  100% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(3%, 5%) scale(1.05);
+  }
+}
+
+@keyframes orb-drift-reverse {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-4%, -3%) scale(1.08);
+  }
+}
